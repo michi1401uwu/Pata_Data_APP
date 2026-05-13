@@ -27,6 +27,7 @@ function Dashboard() {
     const [nuevoCorreo, setNuevoCorreo] = useState('');
     const [nuevaPassword, setNuevaPassword] = useState('');
     const [perfilMensaje, setPerfilMensaje] = useState('');
+    const [inicioData, setInicioData] = useState(null);
 
     const [buscarId, setBuscarId] = useState('');
     const [mascotaBuscada, setMascotaBuscada] = useState(null);
@@ -36,6 +37,7 @@ function Dashboard() {
     useEffect(() => {
         if (correoUsuario) {
             cargarPerfil();
+            cargarInicio();
         }
 
         if (rol === 'dueño' && correoUsuario) {
@@ -67,6 +69,15 @@ function Dashboard() {
         } catch (error) {
             console.error('Error al cargar mascotas:', error);
             setMensaje('❌ No se pudieron cargar las mascotas.');
+        }
+    };
+
+    const cargarInicio = async () => {
+        try {
+            const respuesta = await axios.get(`${API_BASE}/inicio`);
+            setInicioData(respuesta.data);
+        } catch (error) {
+            console.error('Error al cargar inicio:', error);
         }
     };
 
@@ -250,6 +261,27 @@ function Dashboard() {
         }
 
         return { mensaje: '✅ ESTADO: ESTABLE', color: '#28a745' };
+    };
+
+    const renderInicio = () => {
+        if (!inicioData) return null;
+
+        return (
+            <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#e9f7ff' }}>
+                <h2 style={{ marginTop: 0 }}>Bienvenido a Pata-Data</h2>
+                <p style={{ margin: '10px 0' }}>{inicioData.mensaje}</p>
+                <p style={{ margin: '5px 0' }}><strong>Fecha y hora del servidor:</strong> {new Date(inicioData.fechaHora).toLocaleString()}</p>
+                <p style={{ margin: '5px 0' }}><strong>Total de mascotas registradas:</strong> {inicioData.cantidadMascotas}</p>
+                <div style={{ marginTop: '15px' }}>
+                    <strong>5 módulos del proyecto:</strong>
+                    <ul style={{ margin: '10px 0 0 20px' }}>
+                        {inicioData.modulos.map((modulo, index) => (
+                            <li key={index}>{modulo}</li>
+                        ))}
+                    </ul>
+                </div>
+            </section>
+        );
     };
 
     const renderPerfil = () => (
@@ -490,6 +522,7 @@ function Dashboard() {
             )}
 
             <div style={{ display: 'grid', gap: '20px' }}>
+                {renderInicio()}
                 {renderPerfil()}
 
                 {rol === 'dueño' ? renderOwnerDashboard() : rol === 'veterinario' ? renderVetDashboard() : (

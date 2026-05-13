@@ -50,6 +50,23 @@ def get_password_hash(password):
 def read_root():
     return {"mensaje": "Backend de Pata-Data funcionando perfectamente"}
 
+@app.get("/api/inicio")
+def inicio(db: Session = Depends(get_db)):
+    cantidad_mascotas = db.query(models.Mascota).count()
+    modulos = [
+        "Autenticación y autorización",
+        "CRUD de mascotas",
+        "Simulación de datos biométricos",
+        "Análisis de salud y gráficos",
+        "Perfil de usuario y veterinario",
+    ]
+    return {
+        "mensaje": "Bienvenido a Pata-Data, tu sistema de monitoreo biométrico para mascotas",
+        "fechaHora": datetime.utcnow().isoformat() + "Z",
+        "modulos": modulos,
+        "cantidadMascotas": cantidad_mascotas,
+    }
+
 # A) REGISTRO DE DUEÑO (USUARIO)
 @app.post("/api/registro/usuario")
 def registro_usuario(
