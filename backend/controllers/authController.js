@@ -12,13 +12,13 @@ const registro = (req, res) => {
     Auth.findByEmail(email, (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length > 0) {
-        return res.status(400).json({ mensaje: 'Este email ya está registrado' });
+            return res.status(400).json({ mensaje: 'Este email ya está registrado' });
         }
 
         const passwordEncriptada = bcrypt.hashSync(password, 10);
-        Auth.createUser({ nombre, email, password: passwordEncriptada }, (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ mensaje: 'Usuario registrado correctamente', id: result.insertId });
+        Auth.createUser({ nombre, correo: email, password: passwordEncriptada }, (err, result) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.status(201).json({ mensaje: 'Usuario registrado correctamente', id: result.insertId });
         });
     });
 };
@@ -42,13 +42,17 @@ const login = (req, res) => {
         }
 
         const token = jwt.sign(
-        { id: usuario.id, email: usuario.email, nombre: usuario.nombre },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES }
+            { id: usuario.id, email: usuario.email, nombre: usuario.nombre },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES }
         );
 
         res.json({ mensaje: 'Login exitoso', token });
     });
 };
 
-module.exports = { registro, login };
+const protegido = (req, res) => {
+    res.json({ mensaje: 'Acceso autorizado', usuario: req.usuario });
+};
+
+module.exports = { registro, login, protegido };

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const authRoutes = require('./routes/auth');
+const verificarToken = require('./middlewares/authMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,6 +10,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/auth', authRoutes);
+app.get('/api/auth/protegido', verificarToken, (req, res) => {
+    res.json({ mensaje: 'Ruta protegida válida', usuario: req.usuario });
+});
 
 app.get('/api/inicio', async (req, res) => {
     try {

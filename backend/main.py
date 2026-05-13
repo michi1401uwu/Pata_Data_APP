@@ -254,6 +254,33 @@ def obtener_mascota(mascota_id: int, db: Session = Depends(get_db)):
         },
     }
 
+# H.2) BUSCAR DUEÑOS POR NOMBRE (VETERINARIO)
+@app.get("/api/duenos")
+def buscar_duenos(nombre: str = None, db: Session = Depends(get_db)):
+    query = db.query(models.Usuario)
+    if nombre:
+        filtro = f"%{nombre}%"
+        query = query.filter(
+            models.Usuario.nombre.ilike(filtro) |
+            models.Usuario.apellido.ilike(filtro) |
+            models.Usuario.correo.ilike(filtro)
+        )
+
+    dueños = query.all()
+    return [
+        {
+            "id": dueno.id,
+            "nombre": dueno.nombre,
+            "apellido": dueno.apellido,
+            "correo": dueno.correo,
+            "mascotas": [
+                {"id": mascota.id, "nombre": mascota.nombre, "especie": mascota.especie, "raza": mascota.raza}
+                for mascota in dueno.mascotas
+            ]
+        }
+        for dueno in dueños
+    ]
+
     
 # I) EDITAR MASCOTA (Update) - HTTP 200 OK
 @app.put("/api/mascotas/{mascota_id}", status_code=status.HTTP_200_OK)

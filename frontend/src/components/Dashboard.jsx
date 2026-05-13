@@ -29,9 +29,9 @@ function Dashboard() {
     const [perfilMensaje, setPerfilMensaje] = useState('');
     const [inicioData, setInicioData] = useState(null);
 
-    const [buscarId, setBuscarId] = useState('');
-    const [mascotaBuscada, setMascotaBuscada] = useState(null);
-    const [historialBusqueda, setHistorialBusqueda] = useState([]);
+    const [busquedaNombre, setBusquedaNombre] = useState('');
+    const [duenosEncontrados, setDuenosEncontrados] = useState([]);
+    const [mascotaSeleccionada, setMascotaSeleccionada] = useState(null);
     const [busquedaMensaje, setBusquedaMensaje] = useState('');
 
     useEffect(() => {
@@ -156,32 +156,44 @@ function Dashboard() {
         }
     };
 
-    const buscarMascotaPorId = async (e) => {
+    const buscarDuenoPorNombre = async (e) => {
         e.preventDefault();
         setBusquedaMensaje('');
-        setMascotaBuscada(null);
-        setHistorialBusqueda([]);
+        setDuenosEncontrados([]);
+        setMascotaSeleccionada(null);
 
-        if (!buscarId || Number.isNaN(Number(buscarId))) {
-            setBusquedaMensaje('Ingresa un ID de mascota válido.');
+        if (!busquedaNombre.trim()) {
+            setBusquedaMensaje('Ingresa el nombre o correo del dueño.');
             return;
         }
 
         try {
-            const [detalleResp, historialResp] = await Promise.all([
-                axios.get(`${API_BASE}/mascotas/${buscarId}`),
-                axios.get(`${API_BASE}/mascotas/${buscarId}/historial`),
-            ]);
+            const respuesta = await axios.get(`${API_BASE}/duenos`, {
+                params: { nombre: busquedaNombre.trim() },
+            });
 
-            setMascotaBuscada(detalleResp.data);
-            setHistorialBusqueda(Array.isArray(historialResp.data) ? historialResp.data : []);
-        } catch (error) {
-            console.error('Error en búsqueda de mascota:', error);
-            if (error.response?.status === 404) {
-                setBusquedaMensaje('❌ Mascota no encontrada.');
-            } else {
-                setBusquedaMensaje('❌ Error al buscar la mascota. Intenta de nuevo.');
+            const dueños = Array.isArray(respuesta.data) ? respuesta.data : [];
+            if (dueños.length === 0) {
+                setBusquedaMensaje('❌ No se encontró ningún dueño con ese nombre.');
+                return;
             }
+
+            setDuenosEncontrados(dueños);
+        } catch (error) {
+            console.error('Error en búsqueda de dueño:', error);
+            setBusquedaMensaje('❌ Error al buscar el dueño. Intenta de nuevo.');
+        }
+    };
+
+    const seleccionarMascota = async (mascota) => {
+        setMascotaSeleccionada(mascota);
+        setBusquedaMensaje('');
+
+        try {
+            await verSignos(mascota.id);
+        } catch (error) {
+            console.error('Error al seleccionar mascota:', error);
+            setBusquedaMensaje('❌ Error al cargar el historial de la mascota.');
         }
     };
 
@@ -446,19 +458,20 @@ function Dashboard() {
     );
 
     const renderVetDashboard = () => {
-        const ultimoRegistro = historialBusqueda.length > 0 ? historialBusqueda[historialBusqueda.length - 1] : null;
+        const historial = mascotaSeleccionada ? historialMascota[mascotaSeleccionada.id] || [] : [];
+        const ultimoRegistro = historial.length > 0 ? historial[historial.length - 1] : null;
         const analisisBusqueda = analizarSalud(ultimoRegistro);
 
         return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
                 <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8f9fa' }}>
-                    <h3>Búsqueda por ID de Mascota</h3>
-                    <form onSubmit={buscarMascotaPorId} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                    <h3>Búsqueda de dueño</h3>
+                    <form onSubmit={buscarDuenoPorNombre} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
                         <input
-                            type="number"
-                            placeholder="Ingresa el ID de la mascota"
-                            value={buscarId}
-                            onChange={(e) => setBuscarId(e.target.value)}
+                            type="text"
+                            placeholder="Ingresa nombre, apellido o correo del dueño"
+                            value={busquedaNombre}
+                            onChange={(e) => setBusquedaNombre(e.target.value)}
                             required
                             style={{ padding: '10px', flex: '1 1 220px' }}
                         />
@@ -469,23 +482,51 @@ function Dashboard() {
                     {busquedaMensaje && <p style={{ marginTop: '15px', color: busquedaMensaje.includes('❌') ? '#c82333' : '#155724', fontWeight: 'bold' }}>{busquedaMensaje}</p>}
                 </section>
 
-                {mascotaBuscada && (
+                {duenosEncontrados.length > 0 && (
                     <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff' }}>
-                        <h3>Detalle de Mascota</h3>
-                        <p><strong>ID:</strong> {mascotaBuscada.id}</p>
-                        <p><strong>Nombre:</strong> {mascotaBuscada.nombre}</p>
-                        <p><strong>Especie:</strong> {mascotaBuscada.especie}</p>
-                        <p><strong>Raza:</strong> {mascotaBuscada.raza}</p>
-                        <p><strong>Dueño:</strong> {mascotaBuscada.dueno.nombre} {mascotaBuscada.dueno.apellido} ({mascotaBuscada.dueno.correo})</p>
+                        <h3>Dueños encontrados</h3>
+                        <div style={{ display: 'grid', gap: '15px' }}>
+                            {duenosEncontrados.map((dueno) => (
+                                <div key={dueno.id} style={{ padding: '15px', background: '#f1f3f5', borderRadius: '8px' }}>
+                                    <p style={{ margin: '0 0 5px', fontWeight: 'bold' }}>{dueno.nombre} {dueno.apellido}</p>
+                                    <p style={{ margin: '0 0 10px', color: '#555' }}>{dueno.correo}</p>
+                                    {dueno.mascotas.length > 0 ? (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                            {dueno.mascotas.map((mascota) => (
+                                                <button
+                                                    key={mascota.id}
+                                                    onClick={() => seleccionarMascota(mascota)}
+                                                    style={{ padding: '8px 12px', border: 'none', borderRadius: '6px', background: mascotaSeleccionada?.id === mascota.id ? '#17a2b8' : '#007bff', color: '#fff', cursor: 'pointer' }}
+                                                >
+                                                    {mascota.nombre} ({mascota.especie})
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p style={{ margin: 0, color: '#666' }}>Este dueño no tiene mascotas registradas.</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-                        {historialBusqueda.length > 0 ? (
+                {mascotaSeleccionada && (
+                    <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff' }}>
+                        <h3>Mascota seleccionada</h3>
+                        <p><strong>ID:</strong> {mascotaSeleccionada.id}</p>
+                        <p><strong>Nombre:</strong> {mascotaSeleccionada.nombre}</p>
+                        <p><strong>Especie:</strong> {mascotaSeleccionada.especie}</p>
+                        <p><strong>Raza:</strong> {mascotaSeleccionada.raza}</p>
+
+                        {historial.length > 0 ? (
                             <>
                                 <div style={{ margin: '15px 0', padding: '12px', borderRadius: '8px', background: analisisBusqueda.color, color: '#fff', fontWeight: 'bold' }}>
                                     {analisisBusqueda.mensaje}
                                 </div>
                                 <div style={{ height: '240px', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #ccc' }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={historialBusqueda}>
+                                        <LineChart data={historial}>
                                             <CartesianGrid strokeDasharray="3 3" />
                                             <XAxis dataKey="fecha_hora" tick={{ fontSize: 10 }} />
                                             <YAxis yAxisId="left" domain={[35, 42]} fontSize={10} />
