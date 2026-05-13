@@ -1,16 +1,53 @@
-# React + Vite
+#  Pata-Data: Sistema de Monitoreo Biométrico para Mascotas
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Pata-Data es una plataforma Full-Stack diseñada para monitorear los signos vitales de mascotas mediante simulación IoT. Permite a los dueños registrar a sus mascotas y a los veterinarios consultar historiales clínicos para diagnósticos preventivos.
 
-Currently, two official plugins are available:
+##  Tecnologías Utilizadas
+* **Frontend:** React.js, Vite, Axios, Recharts (para gráficas médicas).
+* **Backend:** FastAPI (Python), SQLAlchemy, JWT (Autenticación).
+* **Base de Datos:** MySQL.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Instalación y Configuración
 
-## React Compiler
+### 1. Clonar el repositorio
+\`\`\`bash
+git clone https://github.com/tu-usuario/Pata_Data_APP.git
+\`\`\`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. Levantar el Backend (FastAPI)
+Navega a la carpeta del backend y activa tu entorno virtual:
+\`\`\`bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+\`\`\`
 
-## Expanding the ESLint configuration
+### 3. Levantar el Frontend (React)
+Abre una nueva terminal, navega a la carpeta del frontend:
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+##  Endpoints Principales (API REST)
+
+**Módulo de Usuarios & Auth**
+* \`POST /api/registro/usuario\` - Registra un nuevo dueño.
+* \`POST /api/login\` - Autenticación y generación de JWT.
+* \`PUT /api/usuario/{correo}\` - Actualiza contraseña o correo.
+* \`DELETE /api/usuario/{correo}\` - Borrado en cascada del usuario y sus mascotas.
+
+**Módulo de Mascotas (CRUD)**
+* \`POST /api/mascotas\` - Registra una nueva mascota.
+* \`GET /api/mis-mascotas/{correo}\` - Obtiene las mascotas de un dueño.
+* \`PUT /api/mascotas/{id}\` - Edita datos de la mascota.
+* \`DELETE /api/mascotas/{id}\` - Elimina una mascota.
+
+**Módulo de Monitoreo IoT & Veterinario**
+* \`POST /api/simular-collar/{id}\` - Inyecta datos biométricos aleatorios.
+* \`GET /api/mascotas/{id}/historial\` - Obtiene el histórico de signos vitales para graficar.
+* \`GET /api/duenos?nombre={query}\` - Buscador de dueños para uso veterinario.
+
+---
+**Desarrollado por:*katherinne michelle torres sierra*
