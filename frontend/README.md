@@ -1,53 +1,53 @@
-#  Pata-Data: Sistema de Monitoreo Biométrico para Mascotas
+# Pata-Data: Sistema de Monitoreo Biométrico para Mascotas
 
-Pata-Data es una plataforma Full-Stack diseñada para monitorear los signos vitales de mascotas mediante simulación IoT. Permite a los dueños registrar a sus mascotas y a los veterinarios consultar historiales clínicos para diagnósticos preventivos.
+## Integrantes
+* **Desarrollador:** [Torres Sirra Katherinne Michelle  y  Salvador Lopez Picazo] - Ingeniería en Sistemas Computacionales.
 
-##  Tecnologías Utilizadas
-* **Frontend:** React.js, Vite, Axios, Recharts (para gráficas médicas).
-* **Backend:** FastAPI (Python), SQLAlchemy, JWT (Autenticación).
-* **Base de Datos:** MySQL.
+## Descripción de los 5 Módulos
+1. **Gestión de Usuarios (Auth):** Sistema de registro y autenticación segura basada en tokens JWT para dueños y personal veterinario.
+2. **Expediente de Mascotas (CRUD):** Plataforma para crear, consultar, modificar y eliminar perfiles de mascotas, vinculados de forma relacional a su dueño.
+3. **Monitoreo IoT:** Endpoint inyector que simula la recepción de datos biométricos (temperatura y pulsaciones) emitidos por el collar inteligente.
+4. **Análisis Clínico:** Motor de evaluación que determina el estado de la mascota mediante un semáforo de salud (Estable, Alerta, Crítico) y grafica su historial.
+5. **Panel Veterinario:** Herramienta de búsqueda global por nombre, correo o apellido que permite a los médicos localizar pacientes rápidamente y auditar sus métricas.
 
-## Instalación y Configuración
+## Comandos de Instalación
 
-### 1. Clonar el repositorio
-\`\`\`bash
-git clone https://github.com/tu-usuario/Pata_Data_APP.git
-\`\`\`
-
-### 2. Levantar el Backend (FastAPI)
-Navega a la carpeta del backend y activa tu entorno virtual:
+### 1. Levantar el Backend (FastAPI / Python)
 \`\`\`bash
 cd backend
+# Activar entorno virtual
+..\.venv\Scripts\activate
+# Instalar dependencias
 pip install -r requirements.txt
-uvicorn main:app --reload
+# Iniciar servidor
+python -m uvicorn main:app --reload
 \`\`\`
 
-### 3. Levantar el Frontend (React)
-Abre una nueva terminal, navega a la carpeta del frontend:
+### 2. Levantar el Frontend (React / Vite)
 \`\`\`bash
 cd frontend
+# Instalar dependencias de Node
 npm install
+# Iniciar servidor de desarrollo
 npm run dev
 \`\`\`
 
-##  Endpoints Principales (API REST)
+## Lista Completa de Endpoints (API REST)
 
-**Módulo de Usuarios & Auth**
-* \`POST /api/registro/usuario\` - Registra un nuevo dueño.
-* \`POST /api/login\` - Autenticación y generación de JWT.
-* \`PUT /api/usuario/{correo}\` - Actualiza contraseña o correo.
-* \`DELETE /api/usuario/{correo}\` - Borrado en cascada del usuario y sus mascotas.
+**Autenticación y Usuarios**
+* `POST /api/registro` - Registra un nuevo usuario encriptando su contraseña.
+* `POST /api/login` - Valida credenciales y devuelve un Access Token (JWT).
+* `GET /api/protegido` - Valida la autenticidad de un token en sesión.
 
-**Módulo de Mascotas (CRUD)**
-* \`POST /api/mascotas\` - Registra una nueva mascota.
-* \`GET /api/mis-mascotas/{correo}\` - Obtiene las mascotas de un dueño.
-* \`PUT /api/mascotas/{id}\` - Edita datos de la mascota.
-* \`DELETE /api/mascotas/{id}\` - Elimina una mascota.
+**Mascotas**
+* `POST /api/mascotas` - Crea un nuevo registro de mascota.
+* `GET /api/mis-mascotas/{correo}` - Devuelve la lista de mascotas de un dueño.
+* `GET /api/mascotas/{id}` - Obtiene los detalles de una mascota específica.
+* `PUT /api/mascotas/{id}` - Actualiza nombre, especie o raza.
+* `DELETE /api/mascotas/{id}` - Borra el expediente de la mascota.
 
-**Módulo de Monitoreo IoT & Veterinario**
-* \`POST /api/simular-collar/{id}\` - Inyecta datos biométricos aleatorios.
-* \`GET /api/mascotas/{id}/historial\` - Obtiene el histórico de signos vitales para graficar.
-* \`GET /api/duenos?nombre={query}\` - Buscador de dueños para uso veterinario.
-
----
-**Desarrollado por:*katherinne michelle torres sierra*
+**Veterinario y Monitoreo**
+* `GET /api/inicio` - Retorna las estadísticas globales para el Dashboard.
+* `GET /api/duenos?nombre={query}` - Buscador de dueños y sus mascotas.
+* `POST /api/simular-collar/{id}` - Inyecta un paquete de datos biométricos aleatorios.
+* `GET /api/mascotas/{id}/historial` - Devuelve el arreglo de signos vitales para graficar.
