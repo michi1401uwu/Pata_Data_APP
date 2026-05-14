@@ -1,21 +1,24 @@
-from fastapi import FastAPI, Depends, HTTPException, Form
+import json
+
+from fastapi import FastAPI, Depends, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from passlib.context import CryptContext
-from typing import List
+from passlib.hash import pbkdf2_sha256
+from typing import List, Optional
 import random
 from fastapi import status
 import models
 from database import SessionLocal, engine
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
 # --- 1. CONFIGURACIÓN DE SEGURIDAD (TOKEN JWT) ---
 SECRET_KEY = "tu_llave_secreta_super_segura_pata_data"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- 2. INICIALIZACIÓN DE LA APP Y CORS ---
 app = FastAPI(title="Pata-Data API")
@@ -40,9 +43,30 @@ def get_db():
     finally:
         db.close()
 
+async def parse_request_data(request: Request) -> dict:
+    """Recibe datos JSON o datos de formulario y devuelve un diccionario."""
+    body = await request.body()
+    print(f"\n=== BODY CRUDO RECIBIDO ===\n{body.decode('utf-8', errors='ignore')}\n===========================\n")
+    if body:
+        try:
+            data = json.loads(body.decode('utf-8'))
+            print(f"=== JSON PARSEADO ===\n{data}\n=====================\n")
+            if isinstance(data, dict):
+                return data
+        except Exception as e:
+            print(f"Error parseando JSON: {e}")
+    try:
+        form = await request.form()
+        print(f"=== FORM PARSEADO ===\n{dict(form)}\n=====================\n")
+        return dict(form)
+    except Exception as e:
+        print(f"Error parseando form: {e}")
+        return {}
+
+
 def get_password_hash(password):
     # Aseguramos que sea string para evitar errores de tipo o bytes
-    return pwd_context.hash(str(password))
+    return pbkdf2_sha256.hash(str(password))
 
 # --- 4. RUTAS (ENDPOINTS) ---
 
@@ -69,20 +93,27 @@ def inicio(db: Session = Depends(get_db)):
 
 # A) REGISTRO DE DUEÑO (USUARIO)
 @app.post("/api/registro/usuario")
-def registro_usuario(
-    nombre: str = Form(...), 
-    apellido: str = Form(...), 
-    correo: str = Form(...), 
-    password: str = Form(...), 
-    db: Session = Depends(get_db)
-):
+async def registro_usuario(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_data(request)
+    nombre = data.get('nombre')
+    apellido = data.get('apellido')
+    correo = data.get('correo')
+    password = data.get('password')
+
+    if not nombre or not apellido or not correo or not password:
+        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios")
+
     # 1. Verificamos si ya existe para evitar errores de duplicado
     existe = db.query(models.Usuario).filter(models.Usuario.correo == correo).first()
     if existe:
         raise HTTPException(status_code=400, detail="El correo ya existe")
-    
+
+    # --- TRAMPA DE DIAGNÓSTICO ---
+    print("\n" + "="*30)
+    print(f"PASSWORD RECIBIDO: '{password}'")
+    print(f"LONGITUD REAL: {len(password)} caracteres")
+    print("="*30 + "\n")
     try:
-        # 2. Creamos el objeto (Asegúrate de que los nombres coincidan con models.py)
         nuevo_usuario = models.Usuario(
             nombre=nombre, 
             apellido=apellido, 
@@ -90,34 +121,33 @@ def registro_usuario(
             password_hash=get_password_hash(password), 
             es_veterinario=False
         )
-        
-        # 3. Guardamos y confirmamos
         db.add(nuevo_usuario)
-        db.commit() # Aquí es donde daba el error 500
-        db.refresh(nuevo_usuario) # Para confirmar que MySQL le asignó un ID
-        
+        db.commit()
+        db.refresh(nuevo_usuario)
         return {"mensaje": "Usuario registrado con éxito", "id": nuevo_usuario.id}
-    
     except Exception as e:
-        db.rollback() # Si algo falla, deshace el intento para no dejar basura
-        print(f"Error real: {e}") # Mira esto en tu terminal negra de VS Code
+        db.rollback()
+        print(f"Error real: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 # B) REGISTRO DE VETERINARIO
 @app.post("/api/registro/veterinario")
-def registro_veterinario(
-    nombre: str = Form(...), 
-    apellido: str = Form(...), 
-    cedula: str = Form(...), 
-    especialidad: str = Form(...), 
-    correo: str = Form(...), 
-    password: str = Form(...), 
-    centro_veterinario: str = Form(...), 
-    db: Session = Depends(get_db)
-):
+async def registro_veterinario(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_data(request)
+    nombre = data.get('nombre')
+    apellido = data.get('apellido')
+    cedula = data.get('cedula')
+    especialidad = data.get('especialidad')
+    correo = data.get('correo')
+    password = data.get('password')
+    centro_veterinario = data.get('centro_veterinario')
+
+    if not nombre or not apellido or not cedula or not especialidad or not correo or not password or not centro_veterinario:
+        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios")
+
     if db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first():
         raise HTTPException(status_code=400, detail="Correo ya registrado")
-    
+
     nuevo_vet = models.Veterinario(
         nombre=nombre, 
         apellido=apellido, 
@@ -133,26 +163,57 @@ def registro_veterinario(
 
 # C) LOGIN (EL QUE TE DABA ERROR 401)
 @app.post("/api/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # Buscamos en ambas tablas
-    user = db.query(models.Usuario).filter(models.Usuario.correo == form_data.username).first()
+async def login(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_data(request)
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Usuario y contraseña son obligatorios")
+
+    user = db.query(models.Usuario).filter(models.Usuario.correo == username).first()
     tipo = "dueño"
     
     if not user:
-        user = db.query(models.Veterinario).filter(models.Veterinario.correo == form_data.username).first()
+        user = db.query(models.Veterinario).filter(models.Veterinario.correo == username).first()
         tipo = "veterinario"
 
-    # Si no existe o la contraseña no coincide (hash), lanza el 401
-    if not user or not pwd_context.verify(form_data.password, user.password_hash):
+    if not user or not pbkdf2_sha256.verify(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    # Si todo bien, genera el "pase de entrada" (Token)
     token = jwt.encode(
         {"sub": user.correo, "tipo": tipo, "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}, 
         SECRET_KEY, 
         algorithm=ALGORITHM
     )
     return {"access_token": token, "token_type": "bearer", "rol": tipo}
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+@app.get("/api/protegido")
+def ruta_protegida(user: dict = Depends(get_current_user)):
+    return {"mensaje": "Acceso concedido", "usuario": user.get("sub"), "rol": user.get("tipo")}
+
+@app.post("/api/protegido")
+async def ruta_protegida_json(request: Request):
+    data = await parse_request_data(request)
+    token = data.get('token')
+    print(f"\n=== TOKEN RECIBIDO ===\n{token}\n======================\n")
+    if not token:
+        raise HTTPException(status_code=400, detail="Token requerido en el body")
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return {"mensaje": "Acceso concedido", "usuario": payload.get("sub"), "rol": payload.get("tipo")}
+    except JWTError as e:
+        print(f"Error decodificando token: {e}")
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
 # D) OBTENER DATOS DEL COLLAR (EL "INYECTOR")
 @app.get("/api/mascotas/{mascota_id}/signos-vitales")
@@ -161,19 +222,20 @@ def obtener_signos(mascota_id: int, limit: int = 10, db: Session = Depends(get_d
 
 # E) REGISTRAR UNA NUEVA MASCOTA
 @app.post("/api/mascotas")
-def registrar_mascota(
-    nombre: str = Form(...),
-    especie: str = Form(...),
-    raza: str = Form(...),
-    correo_dueno: str = Form(...), # Usamos el correo para saber de quién es
-    db: Session = Depends(get_db)
-):
-    # 1. Buscamos al dueño en la base de datos
+async def registrar_mascota(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_data(request)
+    nombre = data.get('nombre')
+    especie = data.get('especie')
+    raza = data.get('raza')
+    correo_dueno = data.get('correo_dueno')
+
+    if not nombre or not especie or not raza or not correo_dueno:
+        raise HTTPException(status_code=400, detail="Todos los campos de la mascota son obligatorios")
+
     dueno = db.query(models.Usuario).filter(models.Usuario.correo == correo_dueno).first()
     if not dueno:
         raise HTTPException(status_code=404, detail="Dueño no encontrado")
     
-    # 2. Creamos a la mascota y la enlazamos con el ID del dueño
     nueva_mascota = models.Mascota(
         nombre=nombre,
         especie=especie,
