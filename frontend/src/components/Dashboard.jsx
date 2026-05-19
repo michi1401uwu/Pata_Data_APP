@@ -4,6 +4,20 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+
+// Solución para que los iconos de los marcadores aparezcan correctamente con Vite/React
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const API_BASE = 'http://127.0.0.1:8000/api';
 
@@ -281,14 +295,14 @@ function Dashboard() {
         const pulsos = Number(datos.pulsaciones);
 
         if (temp > 40 || pulsos > 180) {
-            return { mensaje: '🚨 ESTADO CRÍTICO', color: '#dc3545' };
+            return { mensaje: '🚨 MONITOREO CRÍTICO: RIESGO HEMODINÁMICO', color: '#dc3545' };
         }
 
         if (temp > 39.2 || temp < 37 || pulsos > 145) {
-            return { mensaje: '⚠️ ALERTA MÉDICA', color: '#ffc107' };
+            return { mensaje: '⚠️ ALERTA: DESVIACIÓN DE RANGOS NORMALES', color: '#ffc107' };
         }
 
-        return { mensaje: '✅ ESTADO: ESTABLE', color: '#28a745' };
+        return { mensaje: '✅ PACIENTE HEMODINÁMICAMENTE ESTABLE', color: '#28a745' };
     };
 
     const renderInicio = () => {

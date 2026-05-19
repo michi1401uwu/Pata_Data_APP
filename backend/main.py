@@ -242,40 +242,63 @@ def obtener_historial(mascota_id: int, db: Session = Depends(get_db)):
 # H.0) ASISTENTE DE INTERPRETACIÓN DE DATOS
 @app.get("/api/mascotas/{mascota_id}/asistente")
 def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
-    ultimo_dato = db.query(models.DatoCollar)\
+    # 1. Buscamos la mascota para conocer su especie y nombre
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # 2. Analizamos los últimos 5 registros para detectar patrones de arritmia
+    datos = db.query(models.DatoCollar)\
         .filter(models.DatoCollar.mascota_id == mascota_id)\
         .order_by(models.DatoCollar.fecha_hora.desc())\
-        .first()
+        .limit(5)\
+        .all()
 
-    if not ultimo_dato:
-        return {"interpretacion": "No hay datos suficientes para analizar en este momento."}
+    if not datos:
+        return {"interpretacion": "No hay datos suficientes para un análisis clínico detallado."}
 
-    t = ultimo_dato.temperatura
-    p = ultimo_dato.pulsaciones
+    ultimo = datos[0]
+    t = ultimo.temperatura
+    p = ultimo.pulsaciones
+    estado = ultimo.estado_actividad
+    especie = mascota.especie.lower()
     
-    # Lógica de interpretación del "asistente"
-    if t > 39.5 or p > 160:
-        nota = f"He detectado que {t}°C es una temperatura muy alta y sus pulsaciones ({p} bpm) están aceleradas. Podría ser un golpe de calor o una infección grave. ¡Busca un veterinario pronto!"
-    elif t < 37.5:
-        nota = f"La temperatura está algo baja ({t}°C). Asegúrate de que no tenga frío o revisa si su collar está bien colocado."
-    elif p < 70:
-        nota = "Sus pulsaciones están muy bajas. Si está durmiendo es normal, pero si está activo, podría ser un signo de debilidad."
-    else:
-        nota = f"¡Todo se ve genial! Con {t}°C y {p} bpm, tu mascota está en un rango muy saludable de actividad."
+    diagnosticos = []
+    
+    # Definición de rangos fisiológicos por especie
+    # Gatos: 38.0-39.2°C | 140-220 bpm. Perros: 37.5-39.2°C | 60-140 bpm.
+    es_gato = "gato" in especie
+    t_max, t_min = 39.2, (38.0 if es_gato else 37.5)
+    p_max, p_min = (220 if es_gato else 140), (140 if es_gato else 60)
 
-    return {
-        "interpretacion": nota,
-        "consejo": "Recuerda siempre mantener agua fresca a su disposición.",
-        "datos": {
-            "temp": t,
-            "pulso": p,
-            "ubicacion": {
-                "lat": ultimo_dato.latitud,
-                "lng": ultimo_dato.longitud
-            },
-            "estado": ultimo_dato.estado_actividad
-        }
-    }
+    # A) Análisis de Ritmo Cardíaco (Detección de Arritmia)
+    if len(datos) > 2:
+        pulsos = [d.pulsaciones for d in datos]
+        variabilidad = max(pulsos) - min(pulsos)
+        if variabilidad > 50:
+            diagnosticos.append(f"Se han registrado patrones anormales en el ritmo cardíaco de {mascota.nombre}. Las fluctuaciones sugieren una posible arritmia o respuesta aguda al dolor.")
+
+    # B) Correlación Actividad/Frecuencia
+    if p > p_max:
+        diagnosticos.append(f"Taquicardia clínica detectada ({p} bpm). En estado de {estado}, este valor excede el umbral hemodinámico normal.")
+    elif p < p_min and estado != "Durmiendo":
+        diagnosticos.append(f"Bradicardia detectada ({p} bpm). Se recomienda evaluar el nivel de consciencia y respuesta a estímulos.")
+
+    # C) Análisis Térmico
+    if t > t_max + 0.5:
+        diagnosticos.append(f"Hipertermia severa ({t}°C). Puede indicar un cuadro febril infeccioso o un golpe de calor inminente.")
+    elif t < t_min:
+        diagnosticos.append(f"Temperatura subnormal ({t}°C). Verificar el entorno térmico de la mascota.")
+
+    # D) Conclusión
+    if not diagnosticos:
+        nota = f"Estado Estable: Los signos vitales de {mascota.nombre} son normotérmicos ({t}°C) y normocárdicos ({p} bpm) para un {mascota.especie} en {estado}."
+        consejo = "El paciente se encuentra dentro de los rangos fisiológicos óptimos."
+    else:
+        nota = " ".join(diagnosticos)
+        consejo = "Se recomienda observación clínica continua y restringir la actividad física hasta la valoración por un médico veterinario."
+
+    return {"interpretacion": nota, "consejo": consejo}
 
 # H.1) OBTENER DATOS DE MASCOTA PARA VETERINARIO
 @app.get("/api/mascotas/{mascota_id}")
