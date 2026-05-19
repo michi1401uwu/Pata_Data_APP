@@ -22,25 +22,25 @@ function Registro() {
         e.preventDefault();
         setMensaje('Procesando...');
         
-        // Preparamos los datos tal como los espera FastAPI (Form)
-        const formData = new FormData();
-        formData.append('nombre', nombre);
-        formData.append('apellido', apellido);
-        formData.append('correo', correo);
-        formData.append('password', password);
+        // Enviamos un objeto plano (JSON) para que coincida con Pydantic en FastAPI
+        const datosParaEnviar = {
+            nombre,
+            apellido,
+            correo,
+            password
+        };
 
         let url = 'http://127.0.0.1:8000/api/registro/usuario';
 
-        // Si es veterinario, agregamos los campos extra y cambiamos la URL
         if (tipo === 'veterinario') {
-            formData.append('cedula', cedula);
-            formData.append('especialidad', especialidad);
-            formData.append('centro_veterinario', centro);
+            datosParaEnviar.cedula = cedula;
+            datosParaEnviar.especialidad = especialidad;
+            datosParaEnviar.centro_veterinario = centro;
             url = 'http://127.0.0.1:8000/api/registro/veterinario';
         }
 
         try {
-            await axios.post(url, formData);
+            await axios.post(url, datosParaEnviar);
             setMensaje('✅ ¡Registro exitoso! Redirigiendo...');
         setTimeout(() => navigate('/login'), 2000); // Lo manda al login después de 2 segundos
         } catch (error) {

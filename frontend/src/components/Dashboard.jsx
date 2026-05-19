@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 
 const API_BASE = 'http://127.0.0.1:8000/api';
 
@@ -22,6 +23,7 @@ function Dashboard() {
     const [nombreEdit, setNombreEdit] = useState('');
     const [especieEdit, setEspecieEdit] = useState('');
     const [razaEdit, setRazaEdit] = useState('');
+    const [infoAsistente, setInfoAsistente] = useState({});
 
     const [perfilDatos, setPerfilDatos] = useState({ nombre: '', apellido: '', correo: '', rol: '' });
     const [nuevoCorreo, setNuevoCorreo] = useState('');
@@ -85,15 +87,14 @@ function Dashboard() {
         e.preventDefault();
 
         try {
-            const payload = new FormData();
-            payload.append('nombre', nombre);
-            payload.append('especie', especie);
-            payload.append('raza', raza);
-            payload.append('correo_dueno', correoUsuario);
+            const payload = {
+                nombre: nombre,
+                especie: especie,
+                raza: raza,
+                correo_dueno: correoUsuario
+            };
 
-            await axios.post(`${API_BASE}/mascotas`, payload, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
+            await axios.post(`${API_BASE}/mascotas`, payload);
 
             setNombre('');
             setEspecie('');
@@ -191,6 +192,14 @@ function Dashboard() {
 
         try {
             await verSignos(mascota.id);
+            
+            // Obtener interpretación del asistente
+            try {
+                const resAsistente = await axios.get(`${API_BASE}/mascotas/${mascota.id}/asistente`);
+                setInfoAsistente(prev => ({ ...prev, [mascota.id]: resAsistente.data }));
+            } catch (err) {
+                console.error("Error asistente:", err);
+            }
         } catch (error) {
             console.error('Error al seleccionar mascota:', error);
             setBusquedaMensaje('❌ Error al cargar el historial de la mascota.');
@@ -215,6 +224,13 @@ function Dashboard() {
             if (datos.length > 0) {
                 setSignosMascota((prev) => ({ ...prev, [mascotaId]: datos[datos.length - 1] }));
                 setHistorialMascota((prev) => ({ ...prev, [mascotaId]: datos }));
+
+                // Actualizar asistente también al monitorear
+                const resAsistente = await axios.get(`${API_BASE}/mascotas/${mascotaId}/asistente`);
+                setInfoAsistente(prev => ({ 
+                    ...prev, 
+                    [mascotaId]: resAsistente.data 
+                }));
             } else {
                 setMensaje('ℹ️ La mascota no tiene datos de historial todavía.');
             }
@@ -364,6 +380,7 @@ function Dashboard() {
                         {misMascotas.map((mascota) => {
                             const signo = signosMascota[mascota.id];
                             const historial = historialMascota[mascota.id] || [];
+                            const asistente = infoAsistente[mascota.id];
                             const analisis = analizarSalud(signo);
 
                             return (
@@ -414,6 +431,25 @@ function Dashboard() {
                                             ❤️ Monitorear
                                         </button>
                                     </div>
+
+                                    {asistente?.interpretacion && (
+                                        <div style={{ marginTop: '10px', padding: '10px', background: '#fff9c4', borderRadius: '5px', border: '1px solid #fbc02d', fontSize: '13px' }}>
+                                            <strong>🤖 Asistente Pata-Data:</strong>
+                                            <p style={{ margin: '5px 0' }}>{asistente.interpretacion}</p>
+                                            <small>💡 <em>{asistente.consejo}</em></small>
+                                        </div>
+                                    )}
+
+                                    {signo?.latitud && (
+                                        <div style={{ marginTop: '10px', height: '180px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #ccc' }}>
+                                            <MapContainer center={[signo.latitud, signo.longitud]} zoom={15} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+                                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                                <Marker position={[signo.latitud, signo.longitud]}>
+                                                    <Popup>📍 ¡{mascota.nombre} está aquí!</Popup>
+                                                </Marker>
+                                            </MapContainer>
+                                        </div>
+                                    )}
 
                                     {signo && (
                                         <div style={{ marginTop: '15px', padding: '15px', background: '#fff', borderRadius: '8px', border: '1px solid #ccc' }}>

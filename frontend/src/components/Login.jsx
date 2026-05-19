@@ -12,12 +12,11 @@ function Login() {
     const manejarLogin = async (e) => {
         e.preventDefault();
         
-        const formData = new FormData();
-        formData.append('username', correo);
-        formData.append('password', password);
-
         try {
-        const respuesta = await axios.post('http://127.0.0.1:8000/api/login', formData);
+        const respuesta = await axios.post('http://127.0.0.1:8000/api/login', {
+            username: correo,
+            password: password
+        });
         
         // Guardamos el gafete de entrada
         localStorage.setItem('token', respuesta.data.access_token);

@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
-from typing import List, Optional
+from typing import List, Optional, Annotated
 import random
 from fastapi import status
+from pydantic import BaseModel, EmailStr
 import models
 from database import SessionLocal, engine
 
@@ -43,29 +44,29 @@ def get_db():
     finally:
         db.close()
 
-async def parse_request_data(request: Request) -> dict:
-    """Recibe datos JSON o datos de formulario y devuelve un diccionario."""
-    body = await request.body()
-    print(f"\n=== BODY CRUDO RECIBIDO ===\n{body.decode('utf-8', errors='ignore')}\n===========================\n")
-    if body:
-        try:
-            data = json.loads(body.decode('utf-8'))
-            print(f"=== JSON PARSEADO ===\n{data}\n=====================\n")
-            if isinstance(data, dict):
-                return data
-        except Exception as e:
-            print(f"Error parseando JSON: {e}")
-    try:
-        form = await request.form()
-        print(f"=== FORM PARSEADO ===\n{dict(form)}\n=====================\n")
-        return dict(form)
-    except Exception as e:
-        print(f"Error parseando form: {e}")
-        return {}
+# --- 4. SCHEMAS DE PYDANTIC (Para validación automática) ---
+class UsuarioRegistro(BaseModel):
+    nombre: str
+    apellido: str
+    correo: EmailStr
+    password: str
 
+class VeterinarioRegistro(UsuarioRegistro):
+    cedula: str
+    especialidad: str
+    centro_veterinario: str
+
+class MascotaCreate(BaseModel):
+    nombre: str
+    especie: str
+    raza: str
+    correo_dueno: EmailStr
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 def get_password_hash(password):
-    # Aseguramos que sea string para evitar errores de tipo o bytes
     return pbkdf2_sha256.hash(str(password))
 
 # --- 4. RUTAS (ENDPOINTS) ---
@@ -93,32 +94,18 @@ def inicio(db: Session = Depends(get_db)):
 
 # A) REGISTRO DE DUEÑO (USUARIO)
 @app.post("/api/registro/usuario")
-async def registro_usuario(request: Request, db: Session = Depends(get_db)):
-    data = await parse_request_data(request)
-    nombre = data.get('nombre')
-    apellido = data.get('apellido')
-    correo = data.get('correo')
-    password = data.get('password')
-
-    if not nombre or not apellido or not correo or not password:
-        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios")
-
+async def registro_usuario(user_data: UsuarioRegistro, db: Session = Depends(get_db)):
     # 1. Verificamos si ya existe para evitar errores de duplicado
-    existe = db.query(models.Usuario).filter(models.Usuario.correo == correo).first()
+    existe = db.query(models.Usuario).filter(models.Usuario.correo == user_data.correo).first()
     if existe:
         raise HTTPException(status_code=400, detail="El correo ya existe")
 
-    # --- TRAMPA DE DIAGNÓSTICO ---
-    print("\n" + "="*30)
-    print(f"PASSWORD RECIBIDO: '{password}'")
-    print(f"LONGITUD REAL: {len(password)} caracteres")
-    print("="*30 + "\n")
     try:
         nuevo_usuario = models.Usuario(
-            nombre=nombre, 
-            apellido=apellido, 
-            correo=correo, 
-            password_hash=get_password_hash(password), 
+            nombre=user_data.nombre, 
+            apellido=user_data.apellido, 
+            correo=user_data.correo, 
+            password_hash=get_password_hash(user_data.password), 
             es_veterinario=False
         )
         db.add(nuevo_usuario)
@@ -127,35 +114,22 @@ async def registro_usuario(request: Request, db: Session = Depends(get_db)):
         return {"mensaje": "Usuario registrado con éxito", "id": nuevo_usuario.id}
     except Exception as e:
         db.rollback()
-        print(f"Error real: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 # B) REGISTRO DE VETERINARIO
 @app.post("/api/registro/veterinario")
-async def registro_veterinario(request: Request, db: Session = Depends(get_db)):
-    data = await parse_request_data(request)
-    nombre = data.get('nombre')
-    apellido = data.get('apellido')
-    cedula = data.get('cedula')
-    especialidad = data.get('especialidad')
-    correo = data.get('correo')
-    password = data.get('password')
-    centro_veterinario = data.get('centro_veterinario')
-
-    if not nombre or not apellido or not cedula or not especialidad or not correo or not password or not centro_veterinario:
-        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios")
-
-    if db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first():
+async def registro_veterinario(vet_data: VeterinarioRegistro, db: Session = Depends(get_db)):
+    if db.query(models.Veterinario).filter(models.Veterinario.correo == vet_data.correo).first():
         raise HTTPException(status_code=400, detail="Correo ya registrado")
 
     nuevo_vet = models.Veterinario(
-        nombre=nombre, 
-        apellido=apellido, 
-        cedula=cedula, 
-        especialidad=especialidad, 
-        correo=correo, 
-        centro_veterinario=centro_veterinario, 
-        password_hash=get_password_hash(password)
+        nombre=vet_data.nombre, 
+        apellido=vet_data.apellido, 
+        cedula=vet_data.cedula, 
+        especialidad=vet_data.especialidad, 
+        correo=vet_data.correo, 
+        centro_veterinario=vet_data.centro_veterinario, 
+        password_hash=get_password_hash(vet_data.password)
     )
     db.add(nuevo_vet)
     db.commit()
@@ -163,22 +137,15 @@ async def registro_veterinario(request: Request, db: Session = Depends(get_db)):
 
 # C) LOGIN (EL QUE TE DABA ERROR 401)
 @app.post("/api/login")
-async def login(request: Request, db: Session = Depends(get_db)):
-    data = await parse_request_data(request)
-    username = data.get('username')
-    password = data.get('password')
-
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Usuario y contraseña son obligatorios")
-
-    user = db.query(models.Usuario).filter(models.Usuario.correo == username).first()
+async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(models.Usuario).filter(models.Usuario.correo == login_data.username).first()
     tipo = "dueño"
     
     if not user:
-        user = db.query(models.Veterinario).filter(models.Veterinario.correo == username).first()
+        user = db.query(models.Veterinario).filter(models.Veterinario.correo == login_data.username).first()
         tipo = "veterinario"
 
-    if not user or not pbkdf2_sha256.verify(password, user.password_hash):
+    if not user or not pbkdf2_sha256.verify(login_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     token = jwt.encode(
@@ -200,21 +167,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 def ruta_protegida(user: dict = Depends(get_current_user)):
     return {"mensaje": "Acceso concedido", "usuario": user.get("sub"), "rol": user.get("tipo")}
 
-@app.post("/api/protegido")
-async def ruta_protegida_json(request: Request):
-    data = await parse_request_data(request)
-    token = data.get('token')
-    print(f"\n=== TOKEN RECIBIDO ===\n{token}\n======================\n")
-    if not token:
-        raise HTTPException(status_code=400, detail="Token requerido en el body")
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return {"mensaje": "Acceso concedido", "usuario": payload.get("sub"), "rol": payload.get("tipo")}
-    except JWTError as e:
-        print(f"Error decodificando token: {e}")
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
 # D) OBTENER DATOS DEL COLLAR (EL "INYECTOR")
 @app.get("/api/mascotas/{mascota_id}/signos-vitales")
 def obtener_signos(mascota_id: int, limit: int = 10, db: Session = Depends(get_db)):
@@ -222,24 +174,15 @@ def obtener_signos(mascota_id: int, limit: int = 10, db: Session = Depends(get_d
 
 # E) REGISTRAR UNA NUEVA MASCOTA
 @app.post("/api/mascotas")
-async def registrar_mascota(request: Request, db: Session = Depends(get_db)):
-    data = await parse_request_data(request)
-    nombre = data.get('nombre')
-    especie = data.get('especie')
-    raza = data.get('raza')
-    correo_dueno = data.get('correo_dueno')
-
-    if not nombre or not especie or not raza or not correo_dueno:
-        raise HTTPException(status_code=400, detail="Todos los campos de la mascota son obligatorios")
-
-    dueno = db.query(models.Usuario).filter(models.Usuario.correo == correo_dueno).first()
+async def registrar_mascota(mascota_in: MascotaCreate, db: Session = Depends(get_db)):
+    dueno = db.query(models.Usuario).filter(models.Usuario.correo == mascota_in.correo_dueno).first()
     if not dueno:
         raise HTTPException(status_code=404, detail="Dueño no encontrado")
     
     nueva_mascota = models.Mascota(
-        nombre=nombre,
-        especie=especie,
-        raza=raza,
+        nombre=mascota_in.nombre,
+        especie=mascota_in.especie,
+        raza=mascota_in.raza,
         dueno_id=dueno.id
     )
     db.add(nueva_mascota)
@@ -273,8 +216,8 @@ def simular_datos_collar(mascota_id: int, db: Session = Depends(get_db)):
         mascota_id=mascota_id,
         temperatura=round(random.uniform(37.5, 39.5), 1), 
         pulsaciones=random.randint(80, 140), # <-- Cambiado de ritmo_cardiaco a pulsaciones
-        latitud=21.9333,
-        longitud=-99.9667,
+        latitud=21.9333 + random.uniform(-0.005, 0.005), # Simulación de movimiento
+        longitud=-99.9667 + random.uniform(-0.005, 0.005),
         estado_actividad="Activo" # Agregado porque lo tienes en tu modelo
     )
     
@@ -295,6 +238,44 @@ def obtener_historial(mascota_id: int, db: Session = Depends(get_db)):
         .limit(20)\
         .all()
     return historial
+
+# H.0) ASISTENTE DE INTERPRETACIÓN DE DATOS
+@app.get("/api/mascotas/{mascota_id}/asistente")
+def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
+    ultimo_dato = db.query(models.DatoCollar)\
+        .filter(models.DatoCollar.mascota_id == mascota_id)\
+        .order_by(models.DatoCollar.fecha_hora.desc())\
+        .first()
+
+    if not ultimo_dato:
+        return {"interpretacion": "No hay datos suficientes para analizar en este momento."}
+
+    t = ultimo_dato.temperatura
+    p = ultimo_dato.pulsaciones
+    
+    # Lógica de interpretación del "asistente"
+    if t > 39.5 or p > 160:
+        nota = f"He detectado que {t}°C es una temperatura muy alta y sus pulsaciones ({p} bpm) están aceleradas. Podría ser un golpe de calor o una infección grave. ¡Busca un veterinario pronto!"
+    elif t < 37.5:
+        nota = f"La temperatura está algo baja ({t}°C). Asegúrate de que no tenga frío o revisa si su collar está bien colocado."
+    elif p < 70:
+        nota = "Sus pulsaciones están muy bajas. Si está durmiendo es normal, pero si está activo, podría ser un signo de debilidad."
+    else:
+        nota = f"¡Todo se ve genial! Con {t}°C y {p} bpm, tu mascota está en un rango muy saludable de actividad."
+
+    return {
+        "interpretacion": nota,
+        "consejo": "Recuerda siempre mantener agua fresca a su disposición.",
+        "datos": {
+            "temp": t,
+            "pulso": p,
+            "ubicacion": {
+                "lat": ultimo_dato.latitud,
+                "lng": ultimo_dato.longitud
+            },
+            "estado": ultimo_dato.estado_actividad
+        }
+    }
 
 # H.1) OBTENER DATOS DE MASCOTA PARA VETERINARIO
 @app.get("/api/mascotas/{mascota_id}")
