@@ -56,3 +56,16 @@ class DatoCollar(Base):
     
     # Relación
     mascota = relationship("Mascota", back_populates="datos_biometricos")
+
+class Alerta(Base):
+    __tablename__ = "alertas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"))
+    fecha_hora = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    interpretacion = Column(Text, nullable=False)
+    consejo = Column(Text, nullable=True)
+    nivel_gravedad = Column(String(50), default="informativo") # Ej: informativo, alerta, critico
+
+    # Relación
+    mascota = relationship("Mascota")

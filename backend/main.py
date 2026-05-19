@@ -298,7 +298,22 @@ def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
         nota = " ".join(diagnosticos)
         consejo = "Se recomienda observación clínica continua y restringir la actividad física hasta la valoración por un médico veterinario."
 
-    return {"interpretacion": nota, "consejo": consejo}
+    # Guardar la alerta si hay diagnósticos
+    if diagnosticos:
+        nivel_gravedad = "alerta" if len(diagnosticos) > 0 else "informativo"
+        if "Hipertermia severa" in nota or "Taquicardia clínica" in nota: # Ejemplo de lógica para crítico
+            nivel_gravedad = "critico"
+
+        nueva_alerta = models.Alerta(
+            mascota_id=mascota_id,
+            interpretacion=nota,
+            consejo=consejo,
+            nivel_gravedad=nivel_gravedad
+        )
+        db.add(nueva_alerta)
+        db.commit()
+
+    return {"interpretacion": nota, "consejo": consejo, "nivel_gravedad": nivel_gravedad if diagnosticos else "informativo"}
 
 # H.1) OBTENER DATOS DE MASCOTA PARA VETERINARIO
 @app.get("/api/mascotas/{mascota_id}")
@@ -319,6 +334,16 @@ def obtener_mascota(mascota_id: int, db: Session = Depends(get_db)):
             "correo": mascota.dueno.correo,
         },
     }
+
+# H.3) OBTENER HISTORIAL DE ALERTAS PARA UNA MASCOTA
+@app.get("/api/mascotas/{mascota_id}/alertas")
+def obtener_alertas_mascota(mascota_id: int, db: Session = Depends(get_db)):
+    alertas = db.query(models.Alerta)\
+        .filter(models.Alerta.mascota_id == mascota_id)\
+        .order_by(models.Alerta.fecha_hora.desc())\
+        .all()
+    return alertas
+
 
 # H.2) BUSCAR DUEÑOS POR NOMBRE (VETERINARIO)
 @app.get("/api/duenos")

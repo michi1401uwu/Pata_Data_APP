@@ -38,6 +38,7 @@ function Dashboard() {
     const [especieEdit, setEspecieEdit] = useState('');
     const [razaEdit, setRazaEdit] = useState('');
     const [infoAsistente, setInfoAsistente] = useState({});
+    const [alertasMascota, setAlertasMascota] = useState({});
 
     const [perfilDatos, setPerfilDatos] = useState({ nombre: '', apellido: '', correo: '', rol: '' });
     const [nuevoCorreo, setNuevoCorreo] = useState('');
@@ -214,6 +215,13 @@ function Dashboard() {
             } catch (err) {
                 console.error("Error asistente:", err);
             }
+
+            // Obtener alertas para veterinarios
+            if (rol === 'veterinario') {
+                await cargarAlertas(mascota.id);
+            }
+
+
         } catch (error) {
             console.error('Error al seleccionar mascota:', error);
             setBusquedaMensaje('❌ Error al cargar el historial de la mascota.');
@@ -251,6 +259,20 @@ function Dashboard() {
         } catch (error) {
             console.error('Error al obtener el historial:', error);
             setMensaje('❌ No se pudo obtener el historial.');
+        }
+    };
+
+    const cargarAlertas = async (mascotaId) => {
+        try {
+            const respuesta = await axios.get(`${API_BASE}/mascotas/${mascotaId}/alertas`);
+            const alertas = Array.isArray(respuesta.data) ? respuesta.data : [];
+            setAlertasMascota(prev => ({
+                ...prev,
+                [mascotaId]: alertas
+            }));
+        } catch (error) {
+            console.error('Error al cargar alertas:', error);
+            setBusquedaMensaje('❌ No se pudieron cargar las alertas de la mascota.');
         }
     };
 
@@ -587,6 +609,31 @@ function Dashboard() {
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
+
+                                {alertasMascota[mascotaSeleccionada.id] && alertasMascota[mascotaSeleccionada.id].length > 0 && (
+                                    <div style={{ marginTop: '20px', padding: '15px', background: '#fefefe', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                                        <h4>Historial de Alertas</h4>
+                                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '5px', padding: '10px' }}>
+                                            {alertasMascota[mascotaSeleccionada.id].map((alerta, index) => (
+                                                <div key={index} style={{
+                                                    marginBottom: '10px',
+                                                    padding: '8px',
+                                                    borderRadius: '5px',
+                                                    borderLeft: `4px solid ${alerta.nivel_gravedad === 'critico' ? '#dc3545' : alerta.nivel_gravedad === 'alerta' ? '#ffc107' : '#17a2b8'}`,
+                                                    background: alerta.nivel_gravedad === 'critico' ? '#ffe0e0' : alerta.nivel_gravedad === 'alerta' ? '#fffbe0' : '#e0f7fa',
+                                                    fontSize: '13px'
+                                                }}>
+                                                    <p style={{ margin: '0 0 5px', fontWeight: 'bold' }}>
+                                                        {new Date(alerta.fecha_hora).toLocaleString()} - <span style={{ textTransform: 'uppercase' }}>{alerta.nivel_gravedad}</span>
+                                                    </p>
+                                                    <p style={{ margin: '0 0 5px' }}>{alerta.interpretacion}</p>
+                                                    <small style={{ color: '#555' }}>💡 {alerta.consejo}</small>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                             </>
                         ) : (
                             <p style={{ marginTop: '15px', color: '#666' }}>La mascota no tiene registros de historial clínico aún.</p>
