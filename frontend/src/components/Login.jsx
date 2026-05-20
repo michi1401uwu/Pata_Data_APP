@@ -31,8 +31,17 @@ function Login() {
         }, 1000);
 
         } catch (error) {
-        console.error("Detalles del error:", error);
-        setMensaje('Error: Correo o contraseña incorrectos');
+            console.error("Error de inicio de sesión:", error); // Log del error completo para depuración
+            if (error.response) {
+                // El servidor respondió con un código de estado fuera del rango 2xx
+                setMensaje(`❌ Error: ${error.response.data.detail || 'Correo o contraseña incorrectos'}`);
+            } else if (error.request) {
+                // La petición fue hecha pero no se recibió respuesta (ej. servidor caído, CORS)
+                setMensaje('❌ Error de red: No se pudo conectar con el servidor. Asegúrate de que el backend esté funcionando y sea accesible.');
+            } else {
+                // Algo pasó al configurar la petición que disparó un Error
+                setMensaje(`❌ Error al iniciar sesión: ${error.message}`);
+            }
         }
     };
 

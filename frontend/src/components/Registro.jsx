@@ -44,10 +44,16 @@ function Registro() {
             setMensaje('✅ ¡Registro exitoso! Redirigiendo...');
         setTimeout(() => navigate('/login'), 2000); // Lo manda al login después de 2 segundos
         } catch (error) {
-            if (error.response && error.response.status === 400) {
-                setMensaje('❌ Error: Este correo ya está registrado.');
+            console.error("Error de registro:", error); // Log del error completo para depuración
+            if (error.response) {
+                // El servidor respondió con un código de estado fuera del rango 2xx
+                setMensaje(`❌ Error: ${error.response.data.detail || error.response.statusText || 'Revisa los datos proporcionados.'}`);
+            } else if (error.request) {
+                // La petición fue hecha pero no se recibió respuesta (ej. servidor caído, CORS)
+                setMensaje('❌ Error de red: No se pudo conectar con el servidor. Asegúrate de que el backend esté funcionando y sea accesible.');
             } else {
-                setMensaje('❌ Error al registrar. Revisa los datos.');
+                // Algo pasó al configurar la petición que disparó un Error
+                setMensaje(`❌ Error al registrar: ${error.message}`);
             }
         }
     };

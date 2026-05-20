@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
 from typing import List, Optional, Annotated
+import google.generativeai as genai
 import random
 from fastapi import status
 from pydantic import BaseModel, EmailStr
@@ -20,6 +21,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 SECRET_KEY = "tu_llave_secreta_super_segura_pata_data"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# --- CONFIGURACIÓN DE GEMINI AI ---
+GOOGLE_API_KEY = "TU_API_KEY_AQUI" # Reemplaza con tu llave real
+genai.configure(api_key=GOOGLE_API_KEY)
+
+# --- CACHÉ PARA EL ASISTENTE ---
+asistente_cache = {} # Estructura: { mascota_id: {"ultimo_id": int, "respuesta": dict} }
 
 # --- 2. INICIALIZACIÓN DE LA APP Y CORS ---
 app = FastAPI(title="Pata-Data API")
@@ -242,6 +250,11 @@ def obtener_historial(mascota_id: int, db: Session = Depends(get_db)):
 # H.0) ASISTENTE DE INTERPRETACIÓN DE DATOS
 @app.get("/api/mascotas/{mascota_id}/asistente")
 def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
+    """
+    Analiza los datos con Gemini AI, utilizando un sistema de caché 
+    basado en el ID del último registro para ahorrar tokens y costos.
+    """
+    
     # 1. Buscamos la mascota para conocer su especie y nombre
     mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
     if not mascota:
@@ -256,18 +269,28 @@ def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
 
     if not datos:
         return {"interpretacion": "No hay datos suficientes para un análisis clínico detallado."}
-
+    
     ultimo = datos[0]
+
+    # --- COMPROBACIÓN DE CACHÉ ---
+    # Si ya procesamos este ID exacto para esta mascota, devolvemos lo guardado
+    if mascota_id in asistente_cache:
+        cached_data = asistente_cache[mascota_id]
+        if cached_data["ultimo_id"] == ultimo.id:
+            print(f"DEBUG: Cargando interpretación desde caché para mascota {mascota_id}")
+            return cached_data["respuesta"]
+
     t = ultimo.temperatura
     p = ultimo.pulsaciones
     estado = ultimo.estado_actividad
-    especie = mascota.especie.lower()
-    
+
+    # Lógica de construcción del reporte para Gemini
     diagnosticos = []
-    
+
     # Definición de rangos fisiológicos por especie
     # Gatos: 38.0-39.2°C | 140-220 bpm. Perros: 37.5-39.2°C | 60-140 bpm.
-    es_gato = "gato" in especie
+    especie_nombre = mascota.especie.lower()
+    es_gato = "gato" in especie_nombre
     t_max, t_min = 39.2, (38.0 if es_gato else 37.5)
     p_max, p_min = (220 if es_gato else 140), (140 if es_gato else 60)
 
