@@ -1,39 +1,17 @@
-import json
-
-from fastapi import FastAPI, Depends, HTTPException, Form, Request
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-import traceback
-from passlib.hash import pbkdf2_sha256
-from typing import List, Optional, Annotated
-import google.generativeai as genai
+from datetime import datetime
 import random
-from fastapi import status
-from pydantic import BaseModel, EmailStr
+
 import models
+import schemas
+import security
+import ai_logic
 from database import SessionLocal, engine
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
-
-# --- 1. CONFIGURACIÓN DE SEGURIDAD (TOKEN JWT) ---
-SECRET_KEY = "64f9b8c2e3a1d4b5c6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9" # Puedes usar cualquier cadena larga y aleatoria
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# --- CONFIGURACIÓN DE GEMINI AI ---
-GOOGLE_API_KEY = "AIzaSyDPstDFslEp4CO19_PSxWHx2kLYaKsxDUA" # ¡IMPORTANTE! Reemplaza esto con tu llave real de Google Gemini
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# --- CACHÉ PARA EL ASISTENTE ---
-asistente_cache = {} # Estructura: { mascota_id: {"ultimo_id": int, "respuesta": dict} }
-
-# --- 2. INICIALIZACIÓN DE LA APP Y CORS ---
 app = FastAPI(title="Pata-Data API")
 
-# Esto permite que tu Frontend (React) hable con tu Backend (Python)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -42,47 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Crea las tablas en MySQL automáticamente
 models.Base.metadata.create_all(bind=engine)
 
-# --- 3. DEPENDENCIAS ---
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-# --- 4. SCHEMAS DE PYDANTIC (Para validación automática) ---
-class UsuarioRegistro(BaseModel):
-    nombre: str
-    apellido: str
-    correo: EmailStr
-    password: str
-
-class VeterinarioRegistro(UsuarioRegistro):
-    cedula: str
-    especialidad: str
-    centro_veterinario: str
-
-class MascotaCreate(BaseModel):
-    nombre: str
-    especie: str
-    raza: str
-    correo_dueno: EmailStr
-
-class ChatRequest(BaseModel):
-    mascota_id: int
-    mensaje: str
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-def get_password_hash(password):
-    return pbkdf2_sha256.hash(str(password))
-
-# --- 4. RUTAS (ENDPOINTS) ---
 
 @app.get("/")
 def read_root():
@@ -107,7 +52,7 @@ def inicio(db: Session = Depends(get_db)):
 
 # A) REGISTRO DE DUEÑO (USUARIO)
 @app.post("/api/registro/usuario")
-async def registro_usuario(user_data: UsuarioRegistro, db: Session = Depends(get_db)):
+async def registro_usuario(user_data: schemas.UsuarioRegistro, db: Session = Depends(get_db)):
     # 1. Verificamos si ya existe para evitar errores de duplicado
     existe = db.query(models.Usuario).filter(models.Usuario.correo == user_data.correo).first()
     if existe:
@@ -118,7 +63,7 @@ async def registro_usuario(user_data: UsuarioRegistro, db: Session = Depends(get
             nombre=user_data.nombre, 
             apellido=user_data.apellido, 
             correo=user_data.correo, 
-            password_hash=get_password_hash(user_data.password), 
+            password_hash=security.get_password_hash(user_data.password), 
             es_veterinario=False
         )
         db.add(nuevo_usuario)
@@ -131,7 +76,7 @@ async def registro_usuario(user_data: UsuarioRegistro, db: Session = Depends(get
 
 # B) REGISTRO DE VETERINARIO
 @app.post("/api/registro/veterinario")
-async def registro_veterinario(vet_data: VeterinarioRegistro, db: Session = Depends(get_db)):
+async def registro_veterinario(vet_data: schemas.VeterinarioRegistro, db: Session = Depends(get_db)):
     if db.query(models.Veterinario).filter(models.Veterinario.correo == vet_data.correo).first():
         raise HTTPException(status_code=400, detail="Correo ya registrado")
 
@@ -142,7 +87,7 @@ async def registro_veterinario(vet_data: VeterinarioRegistro, db: Session = Depe
         especialidad=vet_data.especialidad, 
         correo=vet_data.correo, 
         centro_veterinario=vet_data.centro_veterinario, 
-        password_hash=get_password_hash(vet_data.password)
+        password_hash=security.get_password_hash(vet_data.password)
     )
     db.add(nuevo_vet)
     db.commit()
@@ -150,7 +95,7 @@ async def registro_veterinario(vet_data: VeterinarioRegistro, db: Session = Depe
 
 # C) LOGIN (EL QUE TE DABA ERROR 401)
 @app.post("/api/login")
-async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+async def login(login_data: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.Usuario).filter(models.Usuario.correo == login_data.username).first()
     tipo = "dueño"
     
@@ -158,26 +103,14 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         user = db.query(models.Veterinario).filter(models.Veterinario.correo == login_data.username).first()
         tipo = "veterinario"
 
-    if not user or not pbkdf2_sha256.verify(login_data.password, user.password_hash):
+    if not user or not security.verificar_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-    token = jwt.encode(
-        {"sub": user.correo, "tipo": tipo, "exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)}, 
-        SECRET_KEY, 
-        algorithm=ALGORITHM
-    )
+    token = security.crear_token_acceso({"sub": user.correo, "tipo": tipo})
     return {"access_token": token, "token_type": "bearer", "rol": tipo}
 
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
 @app.get("/api/protegido")
-def ruta_protegida(user: dict = Depends(get_current_user)):
+def ruta_protegida(user: dict = Depends(security.get_current_user)):
     return {"mensaje": "Acceso concedido", "usuario": user.get("sub"), "rol": user.get("tipo")}
 
 # D) OBTENER DATOS DEL COLLAR (EL "INYECTOR")
@@ -187,7 +120,7 @@ def obtener_signos(mascota_id: int, limit: int = 10, db: Session = Depends(get_d
 
 # E) REGISTRAR UNA NUEVA MASCOTA
 @app.post("/api/mascotas")
-async def registrar_mascota(mascota_in: MascotaCreate, db: Session = Depends(get_db)):
+async def registrar_mascota(mascota_in: schemas.MascotaCreate, db: Session = Depends(get_db)):
     dueno = db.query(models.Usuario).filter(models.Usuario.correo == mascota_in.correo_dueno).first()
     if not dueno:
         raise HTTPException(status_code=404, detail="Dueño no encontrado")
@@ -236,7 +169,7 @@ def simular_datos_collar(mascota_id: int, db: Session = Depends(get_db)):
     
     db.add(nuevo_dato)
     db.commit()
-    return {"mensaje": "📡 Datos simulados guardados con éxito"}
+    return {"mensaje": " Datos simulados guardados con éxito"}
 
 # H) OBTENER HISTORIAL PARA ANÁLISIS
 @app.get("/api/mascotas/{mascota_id}/historial")
@@ -255,135 +188,15 @@ def obtener_historial(mascota_id: int, db: Session = Depends(get_db)):
 # H.0) ASISTENTE DE INTERPRETACIÓN DE DATOS
 @app.get("/api/mascotas/{mascota_id}/asistente")
 def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
-    """
-    Analiza los datos con Gemini AI, utilizando un sistema de caché 
-    basado en el ID del último registro para ahorrar tokens y costos.
-    """
-    
-    # 1. Buscamos la mascota para conocer su especie y nombre
-    mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
-    if not mascota:
+    resultado = ai_logic.procesar_interpretacion_clinica(mascota_id, db)
+    if not resultado:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
+    return resultado
 
-    # 2. Analizamos los últimos 5 registros para detectar patrones de arritmia
-    datos = db.query(models.DatoCollar)\
-        .filter(models.DatoCollar.mascota_id == mascota_id)\
-        .order_by(models.DatoCollar.fecha_hora.desc())\
-        .limit(5)\
-        .all()
-
-    if not datos:
-        return {"interpretacion": "No hay datos suficientes para un análisis clínico detallado."}
-    
-    ultimo = datos[0]
-
-    # --- COMPROBACIÓN DE CACHÉ ---
-    # Si ya procesamos este ID exacto para esta mascota, devolvemos lo guardado
-    if mascota_id in asistente_cache:
-        cached_data = asistente_cache[mascota_id]
-        if cached_data["ultimo_id"] == ultimo.id:
-            print(f"DEBUG: Cargando interpretación desde caché para mascota {mascota_id}")
-            return cached_data["respuesta"]
-
-    t = ultimo.temperatura
-    p = ultimo.pulsaciones
-    estado = ultimo.estado_actividad
-
-    # Lógica de construcción del reporte para Gemini
-    diagnosticos = []
-
-    # Definición de rangos fisiológicos por especie
-    # Gatos: 38.0-39.2°C | 140-220 bpm. Perros: 37.5-39.2°C | 60-140 bpm.
-    especie_nombre = mascota.especie.lower()
-    es_gato = "gato" in especie_nombre
-    t_max, t_min = 39.2, (38.0 if es_gato else 37.5)
-    p_max, p_min = (220 if es_gato else 140), (140 if es_gato else 60)
-
-    # A) Análisis de Ritmo Cardíaco (Detección de Arritmia)
-    if len(datos) > 2:
-        pulsos = [d.pulsaciones for d in datos]
-        variabilidad = max(pulsos) - min(pulsos)
-        if variabilidad > 50:
-            diagnosticos.append(f"Se han registrado patrones anormales en el ritmo cardíaco de {mascota.nombre}. Las fluctuaciones sugieren una posible arritmia o respuesta aguda al dolor.")
-
-    # B) Correlación Actividad/Frecuencia
-    if p > p_max:
-        diagnosticos.append(f"Taquicardia clínica detectada ({p} bpm). En estado de {estado}, este valor excede el umbral hemodinámico normal.")
-    elif p < p_min and estado != "Durmiendo":
-        diagnosticos.append(f"Bradicardia detectada ({p} bpm). Se recomienda evaluar el nivel de consciencia y respuesta a estímulos.")
-
-    # C) Análisis Térmico
-    if t > t_max + 0.5:
-        diagnosticos.append(f"Hipertermia severa ({t}°C). Puede indicar un cuadro febril infeccioso o un golpe de calor inminente.")
-    elif t < t_min:
-        diagnosticos.append(f"Temperatura subnormal ({t}°C). Verificar el entorno térmico de la mascota.")
-
-    # D) Conclusión
-    if not diagnosticos:
-        nota = f"Estado Estable: Los signos vitales de {mascota.nombre} son normotérmicos ({t}°C) y normocárdicos ({p} bpm) para un {mascota.especie} en {estado}."
-        consejo = "El paciente se encuentra dentro de los rangos fisiológicos óptimos."
-    else:
-        nota = " ".join(diagnosticos)
-        consejo = "Se recomienda observación clínica continua y restringir la actividad física hasta la valoración por un médico veterinario."
-
-    # Guardar la alerta si hay diagnósticos
-    if diagnosticos:
-        nivel_gravedad = "alerta" if len(diagnosticos) > 0 else "informativo"
-        if "Hipertermia severa" in nota or "Taquicardia clínica" in nota: # Ejemplo de lógica para crítico
-            nivel_gravedad = "critico"
-
-        nueva_alerta = models.Alerta(
-            mascota_id=mascota_id,
-            interpretacion=nota,
-            consejo=consejo,
-            nivel_gravedad=nivel_gravedad
-        )
-        db.add(nueva_alerta)
-        db.commit()
-
-    return {"interpretacion": nota, "consejo": consejo, "nivel_gravedad": nivel_gravedad if diagnosticos else "informativo"}
-
-# H.0.1) CHAT HUMANIZADO CON GEMINI
 @app.post("/api/chat")
-async def chat_asistente(chat_in: ChatRequest, db: Session = Depends(get_db)):
-    mascota = db.query(models.Mascota).filter(models.Mascota.id == chat_in.mascota_id).first()
-    if not mascota:
-        raise HTTPException(status_code=404, detail="Mascota no encontrada")
-
-    # Obtener últimos signos para contexto
-    ultimo = db.query(models.DatoCollar).filter(models.DatoCollar.mascota_id == mascota.id).order_by(models.DatoCollar.fecha_hora.desc()).first()
-    
-    contexto_clinico = f"Mascota: {mascota.nombre}, Especie: {mascota.especie}, Raza: {mascota.raza}."
-    if ultimo:
-        contexto_clinico += f" Signos actuales: {ultimo.temperatura}°C, {ultimo.pulsaciones} bpm, Estado: {ultimo.estado_actividad}."
-    
-    prompt = (
-        f"Eres Kadsy, el asistente virtual empático de Pata-Data. "
-        f"Hablas con el dueño de {mascota.nombre}. "
-        f"Aquí está el contexto de salud de la mascota: {contexto_clinico}. "
-        f"Analiza estos datos y responde a la pregunta del dueño de forma humana, profesional y breve. "
-        f"Si hay anomalías en los signos vitales, menciónalas con cuidado y sugiere si es necesario consultar a un veterinario. "
-        f"Pregunta del dueño: {chat_in.mensaje}"
-    )
-
-    try:
-        # Usamos únicamente gemini-1.5-flash: es más rápido y estable para la capa gratuita
-        model = genai.GenerativeModel('gemini-3.5-flash')
-        response = model.generate_content(prompt)
-
-        # Verificamos si la respuesta tiene contenido (evita errores si Gemini bloquea la respuesta por filtros)
-        if response.candidates and response.candidates[0].content.parts:
-            return {"respuesta": response.text}
-        else:
-            return {"respuesta": "Kadsy recibió tu consulta pero no pudo generar una respuesta por políticas de seguridad. Prueba preguntando de otra forma."}
-            
-    except Exception as e: # Capturamos cualquier excepción que ocurra
-        print("="*50)
-        print(f"ERROR CRÍTICO EN KADSY (Gemini): {str(e)}")
-        print("="*50)
-        print(traceback.format_exc()) # Imprimimos el traceback completo para depuración
-        print("="*50)
-        return {"respuesta": "Lo siento, mi conexión con los servidores de salud falló. Por favor, revisa tu conexión a internet o la configuración de la API Key. Consulta la consola del backend para más detalles."}
+async def chat_asistente(chat_in: schemas.ChatRequest, db: Session = Depends(get_db)):
+    respuesta = await ai_logic.chat_con_kadsy(chat_in.mascota_id, chat_in.mensaje, db)
+    return {"respuesta": respuesta}
 
 # H.1) OBTENER DATOS DE MASCOTA PARA VETERINARIO
 @app.get("/api/mascotas/{mascota_id}")
@@ -414,7 +227,6 @@ def obtener_alertas_mascota(mascota_id: int, db: Session = Depends(get_db)):
         .all()
     return alertas
 
-
 # H.2) BUSCAR DUEÑOS POR NOMBRE (VETERINARIO)
 @app.get("/api/duenos")
 def buscar_duenos(nombre: str = None, db: Session = Depends(get_db)):
@@ -441,7 +253,6 @@ def buscar_duenos(nombre: str = None, db: Session = Depends(get_db)):
         }
         for dueno in dueños
     ]
-
     
 # I) EDITAR MASCOTA (Update) - HTTP 200 OK
 @app.put("/api/mascotas/{mascota_id}", status_code=status.HTTP_200_OK)
@@ -524,7 +335,7 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
             usuario.correo = new_correo
 
         if new_password:
-            usuario.password_hash = get_password_hash(new_password)
+            usuario.password_hash = security.get_password_hash(new_password)
 
         db.commit()
         return {"mensaje": "Perfil actualizado con éxito"}
@@ -537,7 +348,7 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
             veterinario.correo = new_correo
 
         if new_password:
-            veterinario.password_hash = get_password_hash(new_password)
+            veterinario.password_hash = security.get_password_hash(new_password)
 
         db.commit()
         return {"mensaje": "Perfil actualizado con éxito"}
