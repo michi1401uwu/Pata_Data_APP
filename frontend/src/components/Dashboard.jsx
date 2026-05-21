@@ -67,6 +67,15 @@ function Dashboard() {
     const [mascotaSeleccionada, setMascotaSeleccionada] = useState(null);
     const [busquedaMensaje, setBusquedaMensaje] = useState('');
 
+    // Estados para el Chat Kadsy
+    const [chatHistory, setChatHistory] = useState([]);
+    const [mensajeChat, setMensajeChat] = useState('');
+    const [cargandoChat, setCargandoChat] = useState(false);
+    const razasPorEspecie = {
+        'Perro': ['Labrador', 'Poodle', 'Chihuahua', 'Pastor Alemán', 'Golden Retriever', 'Bulldog', 'Beagle', 'Pug', 'Otro'],
+        'Gato': ['Siamés', 'Persa', 'Maine Coon', 'Bengala', 'Ragdoll', 'Esfinge', 'Común', 'Otro']
+    };
+
     // Estilos constantes para la nueva estética "Pata Data"
     const styles = {
         appContainer: {
@@ -562,17 +571,75 @@ function Dashboard() {
         );
     };
 
+    const enviarMensajeKadsy = async () => {
+        if (!mensajeChat.trim() || !mascotaSeleccionada) return;
+
+        const nuevoMensaje = { role: 'user', text: mensajeChat };
+        setChatHistory(prev => [...prev, nuevoMensaje]);
+        setMensajeChat('');
+        setCargandoChat(true);
+
+        try {
+            const res = await axios.post(`${API_BASE}/chat`, {
+                mascota_id: mascotaSeleccionada.id,
+                mensaje: mensajeChat
+            });
+            setChatHistory(prev => [...prev, { role: 'kadsy', text: res.data.respuesta }]);
+        } catch (error) {
+            setChatHistory(prev => [...prev, { role: 'kadsy', text: "🐾 Ups, algo salió mal. Inténtalo de nuevo." }]);
+        } finally {
+            setCargandoChat(false);
+        }
+    };
+
+    const renderKadsy = () => {
+        if (!mascotaSeleccionada) return (
+            <div style={styles.tabCard}>
+                <h3 style={{ textTransform: 'uppercase' }}>💬 Kadsy: Tu Asistente Inteligente</h3>
+                <p>¡Hola! Para poder ayudarte, primero selecciona una mascota en la pestaña <strong>INICIO</strong>.</p>
+            </div>
+        );
+        
+        return (
+            <div style={{ ...styles.tabCard, display: 'flex', flexDirection: 'column', height: '600px', backgroundColor: '#8FA3B5' }}>
+                <h3 style={{ textTransform: 'uppercase', marginBottom: '10px' }}>💬 CONSULTA CON KADSY</h3>
+                <div style={{ flex: 1, overflowY: 'auto', background: '#F5E6B8', borderRadius: '15px', padding: '15px', marginBottom: '15px', border: '3px solid #000' }}>
+                    <p style={{ fontSize: '13px', color: '#444', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
+                        <strong>Expediente:</strong> {mascotaSeleccionada.nombre} | {mascotaSeleccionada.especie} ({mascotaSeleccionada.raza})
+                    </p>
+                    {chatHistory.map((msg, i) => (
+                        <div key={i} style={{ textAlign: msg.role === 'user' ? 'right' : 'left', marginBottom: '15px' }}>
+                            <div style={{ 
+                                display: 'inline-block', padding: '10px 15px', borderRadius: '15px', 
+                                background: msg.role === 'user' ? '#E56B1F' : '#F5E6B8',
+                                border: '2px solid #000', maxWidth: '85%', fontWeight: 'bold'
+                            }}>
+                                {msg.role === 'user' ? '👤 Tú: ' : '🤖 Kadsy: '} {msg.text}
+                            </div>
+                        </div>
+                    ))}
+                    {cargandoChat && <p><em>🐾 Kadsy está analizando los signos vitales...</em></p>}
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <input type="text" value={mensajeChat} onChange={(e) => setMensajeChat(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && enviarMensajeKadsy()} placeholder={`Pregunta sobre la salud de ${mascotaSeleccionada.nombre}...`} style={{ ...styles.input, flex: 1 }} />
+                    <button onClick={enviarMensajeKadsy} style={styles.saveButton}>ENVIAR</button>
+                </div>
+            </div>
+        );
+    };
+
     const renderOwnerDashboard = () => (
         <div style={{ padding: '20px' }}>
             {activeSection === 'SALUD' && renderSalud()}
             {activeSection === 'HISTORIAL' && renderHistorial()}
             {activeSection === 'MAPS' && renderMaps()}
             {activeSection === 'PERFIL' && renderPerfil()}
+            {activeSection === 'KADSY' && renderKadsy()}
             
             {/* Sección por defecto para otras pestañas */}
-            {['KADSY', 'KARDEX', 'COMUNIDAD'].includes(activeSection) && (
+            {['INICIO', 'KARDEX', 'COMUNIDAD'].includes(activeSection) && (
                 <div style={styles.tabCard}>
-                    <h3 style={{ textTransform: 'uppercase' }}>SECCIÓN {activeSection}</h3>
+                    {activeSection !== 'INICIO' && <h3 style={{ textTransform: 'uppercase' }}>SECCIÓN {activeSection}</h3>}
                     {activeSection === 'INICIO' && inicioData ? (
                         <div style={{ background: 'rgba(255,255,255,0.2)', padding: '15px', borderRadius: '15px' }}>
                             <p style={{ fontSize: '18px' }}>{inicioData.mensaje}</p>
@@ -592,8 +659,18 @@ function Dashboard() {
                         <h3 style={{ margin: '0 0 15px' }}>REGISTRAR NUEVA MASCOTA</h3>
                         <form onSubmit={manejarRegistroMascota} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                             <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={styles.input} />
-                            <input type="text" placeholder="Especie" value={especie} onChange={(e) => setEspecie(e.target.value)} required style={styles.input} />
-                            <input type="text" placeholder="Raza" value={raza} onChange={(e) => setRaza(e.target.value)} required style={styles.input} />
+                            <select value={especie} onChange={(e) => { setEspecie(e.target.value); setRaza(''); }} required style={styles.input}>
+                                <option value="">Especie</option>
+                                <option value="Perro">Perro</option>
+                                <option value="Gato">Gato</option>
+                            </select>
+                            <select value={raza} onChange={(e) => setRaza(e.target.value)} required style={styles.input} disabled={!especie}>
+                                <option value="">Selecciona Raza</option>
+                                {especie && razasPorEspecie[especie].map(r => (
+                                    <option key={r} value={r}>{r}</option>
+                                ))}
+                            </select>
+                            
                             <button type="submit" style={styles.saveButton}>AÑADIR</button>
                         </form>
                     </section>

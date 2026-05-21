@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+import traceback
 from passlib.hash import pbkdf2_sha256
 from typing import List, Optional, Annotated
 import google.generativeai as genai
@@ -18,12 +19,12 @@ from database import SessionLocal, engine
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 # --- 1. CONFIGURACIÓN DE SEGURIDAD (TOKEN JWT) ---
-SECRET_KEY = "tu_llave_secreta_super_segura_pata_data"
+SECRET_KEY = "64f9b8c2e3a1d4b5c6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9" # Puedes usar cualquier cadena larga y aleatoria
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # --- CONFIGURACIÓN DE GEMINI AI ---
-GOOGLE_API_KEY = "TU_API_KEY_AQUI" # Reemplaza con tu llave real
+GOOGLE_API_KEY = "AIzaSyDPstDFslEp4CO19_PSxWHx2kLYaKsxDUA" # ¡IMPORTANTE! Reemplaza esto con tu llave real de Google Gemini
 genai.configure(api_key=GOOGLE_API_KEY)
 
 # --- CACHÉ PARA EL ASISTENTE ---
@@ -69,6 +70,10 @@ class MascotaCreate(BaseModel):
     especie: str
     raza: str
     correo_dueno: EmailStr
+
+class ChatRequest(BaseModel):
+    mascota_id: int
+    mensaje: str
 
 class LoginRequest(BaseModel):
     username: str
@@ -337,6 +342,48 @@ def asistente_interpretacion(mascota_id: int, db: Session = Depends(get_db)):
         db.commit()
 
     return {"interpretacion": nota, "consejo": consejo, "nivel_gravedad": nivel_gravedad if diagnosticos else "informativo"}
+
+# H.0.1) CHAT HUMANIZADO CON GEMINI
+@app.post("/api/chat")
+async def chat_asistente(chat_in: ChatRequest, db: Session = Depends(get_db)):
+    mascota = db.query(models.Mascota).filter(models.Mascota.id == chat_in.mascota_id).first()
+    if not mascota:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada")
+
+    # Obtener últimos signos para contexto
+    ultimo = db.query(models.DatoCollar).filter(models.DatoCollar.mascota_id == mascota.id).order_by(models.DatoCollar.fecha_hora.desc()).first()
+    
+    contexto_clinico = f"Mascota: {mascota.nombre}, Especie: {mascota.especie}, Raza: {mascota.raza}."
+    if ultimo:
+        contexto_clinico += f" Signos actuales: {ultimo.temperatura}°C, {ultimo.pulsaciones} bpm, Estado: {ultimo.estado_actividad}."
+    
+    prompt = (
+        f"Eres Kadsy, el asistente virtual empático de Pata-Data. "
+        f"Hablas con el dueño de {mascota.nombre}. "
+        f"Aquí está el contexto de salud de la mascota: {contexto_clinico}. "
+        f"Analiza estos datos y responde a la pregunta del dueño de forma humana, profesional y breve. "
+        f"Si hay anomalías en los signos vitales, menciónalas con cuidado y sugiere si es necesario consultar a un veterinario. "
+        f"Pregunta del dueño: {chat_in.mensaje}"
+    )
+
+    try:
+        # Usamos únicamente gemini-1.5-flash: es más rápido y estable para la capa gratuita
+        model = genai.GenerativeModel('gemini-3.5-flash')
+        response = model.generate_content(prompt)
+
+        # Verificamos si la respuesta tiene contenido (evita errores si Gemini bloquea la respuesta por filtros)
+        if response.candidates and response.candidates[0].content.parts:
+            return {"respuesta": response.text}
+        else:
+            return {"respuesta": "Kadsy recibió tu consulta pero no pudo generar una respuesta por políticas de seguridad. Prueba preguntando de otra forma."}
+            
+    except Exception as e: # Capturamos cualquier excepción que ocurra
+        print("="*50)
+        print(f"ERROR CRÍTICO EN KADSY (Gemini): {str(e)}")
+        print("="*50)
+        print(traceback.format_exc()) # Imprimimos el traceback completo para depuración
+        print("="*50)
+        return {"respuesta": "Lo siento, mi conexión con los servidores de salud falló. Por favor, revisa tu conexión a internet o la configuración de la API Key. Consulta la consola del backend para más detalles."}
 
 # H.1) OBTENER DATOS DE MASCOTA PARA VETERINARIO
 @app.get("/api/mascotas/{mascota_id}")
