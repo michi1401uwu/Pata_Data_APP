@@ -14,7 +14,7 @@ class Usuario(Base):
     es_veterinario = Column(Boolean, default=False) # Para saber si es dueño o vet
     
     # Relación: Un usuario tiene muchas mascotas
-    mascotas = relationship("Mascota", back_populates="dueno")
+    mascotas = relationship("Mascota", back_populates="dueno", cascade="all, delete-orphan")
 
 class Veterinario(Base):
     __tablename__ = "veterinarios"
@@ -40,7 +40,9 @@ class Mascota(Base):
     
     # Relaciones
     dueno = relationship("Usuario", back_populates="mascotas")
-    datos_biometricos = relationship("DatoCollar", back_populates="mascota")
+    datos_biometricos = relationship("DatoCollar", back_populates="mascota", cascade="all, delete-orphan")
+    kardex_entries = relationship("Kardex", back_populates="mascota", cascade="all, delete-orphan")
+    alertas = relationship("Alerta", back_populates="mascota", cascade="all, delete-orphan")
 
 class DatoCollar(Base):
     __tablename__ = "datos_collar"
@@ -68,4 +70,16 @@ class Alerta(Base):
     nivel_gravedad = Column(String(50), default="informativo") # Ej: informativo, alerta, critico
 
     # Relación
-    mascota = relationship("Mascota")
+    mascota = relationship("Mascota", back_populates="alertas")
+
+class Kardex(Base):
+    __tablename__ = "kardex"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"))
+    tipo = Column(String(50)) # 'vacuna', 'alergia', 'condicion', 'tratamiento'
+    descripcion = Column(Text, nullable=False)
+    fecha = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    # Relación
+    mascota = relationship("Mascota", back_populates="kardex_entries")

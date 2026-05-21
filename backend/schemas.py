@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
 
 class UsuarioRegistro(BaseModel):
     nombre: str
@@ -29,3 +30,12 @@ class LoginRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class KardexCreate(BaseModel):
+    mascota_id: int
+    tipo: str
+    descripcion: str
+
+class KardexResponse(KardexCreate):
+    id: int
+    fecha: datetime

@@ -1,9 +1,12 @@
-import google.generativeai as genai
+from google import genai
 import models
 from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
 
-GOOGLE_API_KEY = "AIzaSyDPstDFslEp4CO19_PSxWHx2kLYaKsxDUA"
-genai.configure(api_key=GOOGLE_API_KEY)
+load_dotenv()
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Caché para evitar llamadas innecesarias a la IA
 asistente_cache = {}
@@ -19,10 +22,14 @@ def procesar_interpretacion_clinica(mascota_id: int, db: Session):
     
     ultimo = datos[0]
 
+    # Obtener antecedentes del Kardex para el análisis
+    kardex = db.query(models.Kardex).filter(models.Kardex.mascota_id == mascota_id).all()
+    antecedentes = "; ".join([f"{e.tipo}: {e.descripcion}" for e in kardex]) if kardex else "Sin antecedentes registrados."
+
     # Verificación de Caché
     if mascota_id in asistente_cache:
         if asistente_cache[mascota_id]["ultimo_id"] == ultimo.id:
-            return asistente_cache[mascota_id]["respuesta"]
+            pass # Podríamos invalidar si el kardex cambió, por ahora procedemos
 
     t = ultimo.temperatura
     p = ultimo.pulsaciones
@@ -50,7 +57,7 @@ def procesar_interpretacion_clinica(mascota_id: int, db: Session):
         diagnosticos.append(f"Hipotermia ({t}°C).")
 
     if not diagnosticos:
-        nota = f"Estado Estable: {mascota.nombre} está en rangos normales ({t}°C, {p} bpm)."
+        nota = f"Estado Estable: {mascota.nombre} está en rangos normales ({t}°C, {p} bpm). Antecedentes: {antecedentes}"
         consejo = "Continúa con el monitoreo preventivo."
         nivel = "informativo"
     else:
@@ -72,18 +79,24 @@ async def chat_con_kadsy(mascota_id: int, mensaje_usuario: str, db: Session):
     mascota = db.query(models.Mascota).filter(models.Mascota.id == mascota_id).first()
     ultimo = db.query(models.DatoCollar).filter(models.DatoCollar.mascota_id == mascota_id).order_by(models.DatoCollar.fecha_hora.desc()).first()
     
-    contexto = f"Mascota: {mascota.nombre}, {mascota.especie}. "
+    # Enriquecer contexto con el Historial Médico (Kardex)
+    kardex = db.query(models.Kardex).filter(models.Kardex.mascota_id == mascota_id).all()
+    historial_medico = ". ".join([f"{e.tipo.capitalize()}: {e.descripcion}" for e in kardex]) if kardex else "No hay antecedentes médicos registrados."
+
+    contexto = f"Mascota: {mascota.nombre}, {mascota.especie}, {mascota.raza}. Historial Médico: {historial_medico}. "
     if ultimo:
         contexto += f"Signos: {ultimo.temperatura}°C, {ultimo.pulsaciones} bpm en estado {ultimo.estado_actividad}."
 
     prompt = (
-        f"Eres Kadsy, asistente de Pata-Data. Contexto: {contexto}. "
-        f"Responde breve y profesional al dueño. Pregunta: {mensaje_usuario}"
+        f"Eres Kadsy, asistente veterinario virtual de Pata-Data. Contexto clínico completo: {contexto}. "
+        f"Analiza la relación entre el historial médico y los signos actuales para dar respuestas precisas y profesionales. Responde breve y humano. Pregunta: {mensaje_usuario}"
     )
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents=prompt
+        )
         return response.text if response.text else "No pude procesar la respuesta."
-    except Exception:
-        return "Error de conexión con el cerebro de Kadsy."
+    except Exception as e:
+        return f"Error de conexión con el cerebro de Kadsy: {str(e)}"

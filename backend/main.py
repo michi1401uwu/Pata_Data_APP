@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 import random
 
 import models
@@ -20,6 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Al estar la base de datos recién creada (vacia), create_all generará 
+# todas las tablas desde cero sin conflictos.
 models.Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -45,7 +48,7 @@ def inicio(db: Session = Depends(get_db)):
     ]
     return {
         "mensaje": "Bienvenido a Pata-Data, tu sistema de monitoreo biométrico para mascotas",
-        "fechaHora": datetime.utcnow().isoformat() + "Z",
+        "fechaHora": datetime.now(timezone.utc).isoformat(),
         "modulos": modulos,
         "cantidadMascotas": cantidad_mascotas,
     }
@@ -89,9 +92,13 @@ async def registro_veterinario(vet_data: schemas.VeterinarioRegistro, db: Sessio
         centro_veterinario=vet_data.centro_veterinario, 
         password_hash=security.get_password_hash(vet_data.password)
     )
-    db.add(nuevo_vet)
-    db.commit()
-    return {"mensaje": "Veterinario registrado con éxito"}
+    try:
+        db.add(nuevo_vet)
+        db.commit()
+        return {"mensaje": "Veterinario registrado con éxito"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al registrar veterinario: {str(e)}")
 
 # C) LOGIN (EL QUE TE DABA ERROR 401)
 @app.post("/api/login")
@@ -131,11 +138,14 @@ async def registrar_mascota(mascota_in: schemas.MascotaCreate, db: Session = Dep
         raza=mascota_in.raza,
         dueno_id=dueno.id
     )
-    db.add(nueva_mascota)
-    db.commit()
-    db.refresh(nueva_mascota)
-    
-    return {"mensaje": "Mascota registrada con éxito", "mascota_id": nueva_mascota.id}
+    try:
+        db.add(nueva_mascota)
+        db.commit()
+        db.refresh(nueva_mascota)
+        return {"mensaje": "Mascota registrada con éxito", "mascota_id": nueva_mascota.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al registrar mascota: {str(e)}")
 
 # F) OBTENER LAS MASCOTAS DE UN DUEÑO
 @app.get("/api/mis-mascotas/{correo_dueno}")
@@ -166,10 +176,37 @@ def simular_datos_collar(mascota_id: int, db: Session = Depends(get_db)):
         longitud=-99.9667 + random.uniform(-0.005, 0.005),
         estado_actividad="Activo" # Agregado porque lo tienes en tu modelo
     )
-    
-    db.add(nuevo_dato)
-    db.commit()
-    return {"mensaje": " Datos simulados guardados con éxito"}
+    try:
+        db.add(nuevo_dato)
+        db.commit()
+        return {"mensaje": " Datos simulados guardados con éxito"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error al guardar datos del collar")
+
+# --- ENDPOINTS PARA EL KARDEX MÉDICO ---
+@app.post("/api/mascotas/kardex", response_model=schemas.KardexResponse)
+def registrar_entrada_kardex(entrada: schemas.KardexCreate, db: Session = Depends(get_db)):
+    nueva_entrada = models.Kardex(
+        mascota_id=entrada.mascota_id,
+        tipo=entrada.tipo,
+        descripcion=entrada.descripcion
+    )
+    try:
+        db.add(nueva_entrada)
+        db.commit()
+        db.refresh(nueva_entrada)
+        return nueva_entrada
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error al registrar en el kardex")
+
+@app.get("/api/mascotas/{mascota_id}/kardex")
+def obtener_kardex_mascota(mascota_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Kardex)\
+        .filter(models.Kardex.mascota_id == mascota_id)\
+        .order_by(models.Kardex.fecha.desc())\
+        .all()
 
 # H) OBTENER HISTORIAL PARA ANÁLISIS
 @app.get("/api/mascotas/{mascota_id}/historial")
@@ -276,8 +313,12 @@ def actualizar_mascota(mascota_id: int, nombre: str, especie: str, raza: str, db
     mascota.nombre = nombre
     mascota.especie = especie
     mascota.raza = raza
-    db.commit()
-    return {"mensaje": "Mascota actualizada con éxito"}
+    try:
+        db.commit()
+        return {"mensaje": "Mascota actualizada con éxito"}
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error al actualizar mascota")
 
 # J) ELIMINAR MASCOTA (Delete) - HTTP 204 No Content
 @app.delete("/api/mascotas/{mascota_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -290,10 +331,14 @@ def eliminar_mascota(mascota_id: int, db: Session = Depends(get_db)):
             detail="No se puede eliminar: Mascota no encontrada."
         )
     
-    db.delete(mascota)
-    db.commit()
-    # Al ser 204, el cuerpo de la respuesta suele ir vacío, pero la acción es exitosa.
-    return None
+    try:
+        db.delete(mascota)
+        db.commit()
+        # Al ser 204, el cuerpo de la respuesta suele ir vacío, pero la acción es exitosa.
+        return None
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error al eliminar mascota")
 
 # K) OBTENER PERFIL DE USUARIO
 @app.get("/api/usuario/{correo}")
@@ -337,8 +382,12 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
         if new_password:
             usuario.password_hash = security.get_password_hash(new_password)
 
-        db.commit()
-        return {"mensaje": "Perfil actualizado con éxito"}
+        try:
+            db.commit()
+            return {"mensaje": "Perfil actualizado con éxito"}
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error al actualizar perfil")
 
     veterinario = db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first()
     if veterinario:
@@ -350,8 +399,12 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
         if new_password:
             veterinario.password_hash = security.get_password_hash(new_password)
 
-        db.commit()
-        return {"mensaje": "Perfil actualizado con éxito"}
+        try:
+            db.commit()
+            return {"mensaje": "Perfil actualizado con éxito"}
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error al actualizar perfil")
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
@@ -360,18 +413,23 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
 def eliminar_usuario(correo: str, db: Session = Depends(get_db)):
     usuario = db.query(models.Usuario).filter(models.Usuario.correo == correo).first()
     if usuario:
-        mascotas = db.query(models.Mascota).filter(models.Mascota.dueno_id == usuario.id).all()
-        for mascota in mascotas:
-            db.query(models.DatoCollar).filter(models.DatoCollar.mascota_id == mascota.id).delete()
-        db.query(models.Mascota).filter(models.Mascota.dueno_id == usuario.id).delete()
-        db.delete(usuario)
-        db.commit()
-        return None
+        # SQLAlchemy manejará la eliminación de mascotas, alertas, kardex y datos_collar automáticamente gracias al cascade
+        try:
+            db.delete(usuario)
+            db.commit()
+            return None
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error al eliminar cuenta")
 
     veterinario = db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first()
     if veterinario:
-        db.delete(veterinario)
-        db.commit()
-        return None
+        try:
+            db.delete(veterinario)
+            db.commit()
+            return None
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Error al eliminar cuenta")
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")

@@ -49,6 +49,11 @@ function Dashboard() {
     const [signosMascota, setSignosMascota] = useState({});
     const [historialMascota, setHistorialMascota] = useState({});
     const [editandoId, setEditandoId] = useState(null);
+
+    const [kardexMascota, setKardexMascota] = useState({});
+    const [nuevoKardexTipo, setNuevoKardexTipo] = useState('vacuna');
+    const [nuevoKardexDesc, setNuevoKardexDesc] = useState('');
+
     const [nombreEdit, setNombreEdit] = useState('');
     const [especieEdit, setEspecieEdit] = useState('');
     const [razaEdit, setRazaEdit] = useState('');
@@ -233,7 +238,7 @@ function Dashboard() {
             setNombre('');
             setEspecie('');
             setRaza('');
-            setMensaje('🐾 Mascota registrada correctamente.');
+            setMensaje(' Mascota registrada correctamente.');
             await cargarMascotas();
             setTimeout(() => setMensaje(''), 3000);
         } catch (error) {
@@ -327,6 +332,8 @@ function Dashboard() {
         try {
             await verSignos(mascota.id);
             
+            await cargarKardex(mascota.id);
+
             // Obtener interpretación del asistente
             try {
                 const resAsistente = await axios.get(`${API_BASE}/mascotas/${mascota.id}/asistente`);
@@ -378,6 +385,37 @@ function Dashboard() {
         } catch (error) {
             console.error('Error al obtener el historial:', error);
             setMensaje('❌ No se pudo obtener el historial.');
+        }
+    };
+
+    const cargarKardex = async (mascotaId) => {
+        try {
+            const res = await axios.get(`${API_BASE}/mascotas/${mascotaId}/kardex`);
+            setKardexMascota(prev => ({ ...prev, [mascotaId]: res.data }));
+        } catch (err) {
+            console.error("Error al cargar Kardex:", err);
+        }
+    };
+
+    const agregarEntradaKardex = async (e) => {
+        e.preventDefault();
+        if (!mascotaSeleccionada || !nuevoKardexDesc.trim()) return;
+
+        try {
+            await axios.post(`${API_BASE}/mascotas/kardex`, {
+                mascota_id: mascotaSeleccionada.id,
+                tipo: nuevoKardexTipo,
+                descripcion: nuevoKardexDesc
+            });
+            setNuevoKardexDesc('');
+            await cargarKardex(mascotaSeleccionada.id);
+            
+            // Forzar actualización del asistente tras cambios en historial clínico
+            const resAsistente = await axios.get(`${API_BASE}/mascotas/${mascotaSeleccionada.id}/asistente`);
+            setInfoAsistente(prev => ({ ...prev, [mascotaSeleccionada.id]: resAsistente.data }));
+            
+        } catch (err) {
+            console.error("Error al agregar al Kardex:", err);
         }
     };
 
@@ -571,6 +609,59 @@ function Dashboard() {
         );
     };
 
+    const renderKardex = () => {
+        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en INICIO</h3></div>;
+        const entradas = kardexMascota[mascotaSeleccionada.id] || [];
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={styles.tabCard}>
+                    <h3 style={{ textTransform: 'uppercase' }}>REGISTRO MÉDICO (KARDEX): {mascotaSeleccionada.nombre.toUpperCase()}</h3>
+                    <form onSubmit={agregarEntradaKardex} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                        <select value={nuevoKardexTipo} onChange={(e) => setNuevoKardexTipo(e.target.value)} style={styles.input}>
+                            <option value="vacuna">Vacuna</option>
+                            <option value="alergia">Alergia</option>
+                            <option value="condicion">Condición Médica</option>
+                            <option value="tratamiento">Tratamiento</option>
+                        </select>
+                        <input 
+                            type="text" 
+                            placeholder="Descripción del registro..." 
+                            value={nuevoKardexDesc} 
+                            onChange={(e) => setNuevoKardexDesc(e.target.value)} 
+                            style={{ ...styles.input, flex: 1 }} 
+                        />
+                        <button type="submit" style={styles.saveButton}>AÑADIR</button>
+                    </form>
+                </div>
+
+                <div style={styles.tabCard}>
+                    <h3 style={{ textTransform: 'uppercase' }}>HISTORIAL CLÍNICO Y ANTECEDENTES</h3>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', background: '#F5E6B8', borderRadius: '15px', border: '3px solid #000', padding: '15px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid #000', textAlign: 'left' }}>
+                                    <th style={{ padding: '10px' }}>Tipo</th>
+                                    <th style={{ padding: '10px' }}>Descripción</th>
+                                    <th style={{ padding: '10px' }}>Fecha</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {entradas.map((entry) => (
+                                    <tr key={entry.id} style={{ borderBottom: '1px solid #ccc' }}>
+                                        <td style={{ padding: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: '#E56B1F' }}>{entry.tipo}</td>
+                                        <td style={{ padding: '10px' }}>{entry.descripcion}</td>
+                                        <td style={{ padding: '10px', fontSize: '12px' }}>{new Date(entry.fecha).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const enviarMensajeKadsy = async () => {
         if (!mensajeChat.trim() || !mascotaSeleccionada) return;
 
@@ -586,7 +677,7 @@ function Dashboard() {
             });
             setChatHistory(prev => [...prev, { role: 'kadsy', text: res.data.respuesta }]);
         } catch (error) {
-            setChatHistory(prev => [...prev, { role: 'kadsy', text: "🐾 Ups, algo salió mal. Inténtalo de nuevo." }]);
+            setChatHistory(prev => [...prev, { role: 'kadsy', text: " Ups, algo salió mal. Inténtalo de nuevo." }]);
         } finally {
             setCargandoChat(false);
         }
@@ -604,9 +695,24 @@ function Dashboard() {
             <div style={{ ...styles.tabCard, display: 'flex', flexDirection: 'column', height: '600px', backgroundColor: '#8FA3B5' }}>
                 <h3 style={{ textTransform: 'uppercase', marginBottom: '10px' }}>💬 CONSULTA CON KADSY</h3>
                 <div style={{ flex: 1, overflowY: 'auto', background: '#F5E6B8', borderRadius: '15px', padding: '15px', marginBottom: '15px', border: '3px solid #000' }}>
-                    <p style={{ fontSize: '13px', color: '#444', marginBottom: '15px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
+                    <p style={{ fontSize: '13px', color: '#444', marginBottom: '5px', borderBottom: '1px solid #000', paddingBottom: '5px' }}>
                         <strong>Expediente:</strong> {mascotaSeleccionada.nombre} | {mascotaSeleccionada.especie} ({mascotaSeleccionada.raza})
                     </p>
+                    {/* Resumen del Kardex para contexto visual en el Chat */}
+                    <div style={{ marginBottom: '15px', fontSize: '12px', color: '#555' }}>
+                        <strong>Contexto Clínico Detectado (Kardex):</strong>
+                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '5px' }}>
+                            {(kardexMascota[mascotaSeleccionada.id] || []).length > 0 ? (
+                                kardexMascota[mascotaSeleccionada.id].map((entry, idx) => (
+                                    <span key={idx} style={{ background: '#E56B1F', color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' }}>
+                                        {entry.tipo.toUpperCase()}: {entry.descripcion}
+                                    </span>
+                                ))
+                            ) : (
+                                <span style={{ fontStyle: 'italic' }}>Sin antecedentes previos. Kadsy analizará solo signos actuales.</span>
+                            )}
+                        </div>
+                    </div>
                     {chatHistory.map((msg, i) => (
                         <div key={i} style={{ textAlign: msg.role === 'user' ? 'right' : 'left', marginBottom: '15px' }}>
                             <div style={{ 
@@ -614,11 +720,11 @@ function Dashboard() {
                                 background: msg.role === 'user' ? '#E56B1F' : '#F5E6B8',
                                 border: '2px solid #000', maxWidth: '85%', fontWeight: 'bold'
                             }}>
-                                {msg.role === 'user' ? '👤 Tú: ' : '🤖 Kadsy: '} {msg.text}
+                                {msg.role === 'user' ? '👤 Tú: ' : ' Kadsy: '} {msg.text}
                             </div>
                         </div>
                     ))}
-                    {cargandoChat && <p><em>🐾 Kadsy está analizando los signos vitales...</em></p>}
+                    {cargandoChat && <p><em> Kadsy está analizando los signos vitales...</em></p>}
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <input type="text" value={mensajeChat} onChange={(e) => setMensajeChat(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && enviarMensajeKadsy()} placeholder={`Pregunta sobre la salud de ${mascotaSeleccionada.nombre}...`} style={{ ...styles.input, flex: 1 }} />
@@ -635,77 +741,102 @@ function Dashboard() {
             {activeSection === 'MAPS' && renderMaps()}
             {activeSection === 'PERFIL' && renderPerfil()}
             {activeSection === 'KADSY' && renderKadsy()}
+            {activeSection === 'KARDEX' && renderKardex()}
+            {activeSection === 'MIS MASCOTAS' && renderMisMascotasSection()}
             
             {/* Sección por defecto para otras pestañas */}
-            {['INICIO', 'KARDEX', 'COMUNIDAD'].includes(activeSection) && (
+            {['INICIO', 'COMUNIDAD'].includes(activeSection) && (
                 <div style={styles.tabCard}>
                     {activeSection !== 'INICIO' && <h3 style={{ textTransform: 'uppercase' }}>SECCIÓN {activeSection}</h3>}
                     {activeSection === 'INICIO' && inicioData ? (
                         <div style={{ background: 'rgba(255,255,255,0.2)', padding: '15px', borderRadius: '15px' }}>
-                            <p style={{ fontSize: '18px' }}>{inicioData.mensaje}</p>
+                            <h1 style={{ 
+                                fontSize: '42px', 
+                                fontWeight: '900', 
+                                textAlign: 'center', 
+                                marginBottom: '25px', 
+                                color: '#000',
+                                textShadow: '4px 4px 0px #F0B144',
+                                textTransform: 'uppercase',
+                                lineHeight: '1.1'
+                            }}>
+                                {inicioData.mensaje}
+                            </h1>
                             <p><strong>Total de mascotas en el sistema:</strong> {inicioData.cantidadMascotas}</p>
                             <p><em>Explora las opciones en el menú lateral para cuidar a tu mejor amigo.</em></p>
+                            <div style={{ marginTop: '20px', borderTop: '2px solid #000', paddingTop: '15px' }}>
+                                <h3 style={{ textTransform: 'uppercase' }}> ¿Qué es Pata-Data?</h3>
+                                <p>Es un ecosistema inteligente diseñado para el monitoreo preventivo de salud animal. Combinamos collares IoT que miden signos vitales con una potente base de datos clínica para que tú y tu veterinario tengan información precisa en tiempo real.</p>
+                                
+                                <h3 style={{ textTransform: 'uppercase', marginTop: '20px' }}> Conoce a Kadsy</h3>
+                                <p>Kadsy es tu asistente veterinario virtual impulsado por inteligencia artificial. No solo recibe datos, sino que los interpreta basándose en el historial médico (Kardex) de tu mascota.</p>
+                                <p><strong>¿Qué puedes preguntarle?</strong></p>
+                                <ul style={{ marginLeft: '20px' }}>
+                                    <li>"¿Es normal que mi perro tenga 39.5°C si acaba de jugar?"</li>
+                                    <li>"¿Qué relación hay entre sus pulsaciones actuales y su última vacuna?"</li>
+                                    <li>"Interpretación de signos vitales según su raza y edad."</li>
+                                </ul>
+                            </div>
                         </div>
                     ) : (
                         <p>Contenido en desarrollo para la pestaña {activeSection}.</p>
                     )}
                 </div>
             )}
-
-            {/* Panel de Gestión de Mascotas (Solo visible en INICIO o cuando no hay selección específica) */}
-            {activeSection === 'INICIO' && (
-                <>
-                    <section style={{ padding: '20px', border: '4px solid #000', borderRadius: '25px', background: '#F5E6B8', marginBottom: '20px' }}>
-                        <h3 style={{ margin: '0 0 15px' }}>REGISTRAR NUEVA MASCOTA</h3>
-                        <form onSubmit={manejarRegistroMascota} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-                            <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={styles.input} />
-                            <select value={especie} onChange={(e) => { setEspecie(e.target.value); setRaza(''); }} required style={styles.input}>
-                                <option value="">Especie</option>
-                                <option value="Perro">Perro</option>
-                                <option value="Gato">Gato</option>
-                            </select>
-                            <select value={raza} onChange={(e) => setRaza(e.target.value)} required style={styles.input} disabled={!especie}>
-                                <option value="">Selecciona Raza</option>
-                                {especie && razasPorEspecie[especie].map(r => (
-                                    <option key={r} value={r}>{r}</option>
-                                ))}
-                            </select>
-                            
-                            <button type="submit" style={styles.saveButton}>AÑADIR</button>
-                        </form>
-                    </section>
-
-                    <section style={{ padding: '20px', border: '4px solid #000', borderRadius: '25px', background: '#8FA3B5' }}>
-                        <h3 style={{ margin: '0 0 15px' }}>MIS MASCOTAS ({misMascotas.length})</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
-                            {misMascotas.map(mascota => (
-                                <div key={mascota.id} style={{ 
-                                    background: mascotaSeleccionada?.id === mascota.id ? '#E56B1F' : '#F5E6B8',
-                                    border: '3px solid #000',
-                                    borderRadius: '15px',
-                                    padding: '15px',
-                                    boxShadow: '4px 4px 0px #000'
-                                }}>
-                                    <h4 style={{ margin: '0 0 5px' }}>{mascota.nombre.toUpperCase()}</h4>
-                                    <p style={{ margin: '0 0 10px', fontSize: '14px' }}>{mascota.especie} | {mascota.raza}</p>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button onClick={() => seleccionarMascota(mascota)} style={{ flex: 1, ...styles.saveButton, padding: '8px', fontSize: '12px' }}>
-                                            MONITOREAR
-                                        </button>
-                                        <button onClick={() => simularCollar(mascota.id)} style={{ ...styles.saveButton, backgroundColor: '#17a2b8', padding: '8px', color: '#fff' }}>
-                                            📡
-                                        </button>
-                                        <button onClick={() => eliminarMascota(mascota.id)} style={{ ...styles.saveButton, backgroundColor: '#dc3545', padding: '8px', color: '#fff' }}>
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                </>
-            )}
         </div>
+    );
+
+    const renderMisMascotasSection = () => (
+        <>
+            <section style={{ padding: '20px', border: '4px solid #000', borderRadius: '25px', background: '#F5E6B8', marginBottom: '20px' }}>
+                <h3 style={{ margin: '0 0 15px' }}>REGISTRAR NUEVA MASCOTA</h3>
+                <form onSubmit={manejarRegistroMascota} style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                    <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required style={styles.input} />
+                    <select value={especie} onChange={(e) => { setEspecie(e.target.value); setRaza(''); }} required style={styles.input}>
+                        <option value="">Especie</option>
+                        <option value="Perro">Perro</option>
+                        <option value="Gato">Gato</option>
+                    </select>
+                    <select value={raza} onChange={(e) => setRaza(e.target.value)} required style={styles.input} disabled={!especie}>
+                        <option value="">Selecciona Raza</option>
+                        {especie && razasPorEspecie[especie].map(r => (
+                            <option key={r} value={r}>{r}</option>
+                        ))}
+                    </select>
+                    
+                    <button type="submit" style={styles.saveButton}>AÑADIR</button>
+                </form>
+            </section>
+
+            <section style={{ padding: '20px', border: '4px solid #000', borderRadius: '25px', background: '#8FA3B5' }}>
+                <h3 style={{ margin: '0 0 15px' }}>MIS MASCOTAS ({misMascotas.length})</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
+                    {misMascotas.map(mascota => (
+                        <div key={mascota.id} style={{ 
+                            background: mascotaSeleccionada?.id === mascota.id ? '#E56B1F' : '#F5E6B8',
+                            border: '3px solid #000',
+                            borderRadius: '15px',
+                            padding: '15px',
+                            boxShadow: '4px 4px 0px #000'
+                        }}>
+                            <h4 style={{ margin: '0 0 5px' }}>{mascota.nombre.toUpperCase()}</h4>
+                            <p style={{ margin: '0 0 10px', fontSize: '14px' }}>{mascota.especie} | {mascota.raza}</p>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={() => seleccionarMascota(mascota)} style={{ flex: 1, ...styles.saveButton, padding: '8px', fontSize: '12px' }}>
+                                    MONITOREAR
+                                </button>
+                                <button onClick={() => simularCollar(mascota.id)} style={{ ...styles.saveButton, backgroundColor: '#17a2b8', padding: '8px', color: '#fff' }}>
+                                    📡
+                                </button>
+                                <button onClick={() => eliminarMascota(mascota.id)} style={{ ...styles.saveButton, backgroundColor: '#dc3545', padding: '8px', color: '#fff' }}>
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        </>
     );
 
     const renderVetDashboard = () => {
@@ -797,7 +928,7 @@ function Dashboard() {
                                         fontSize: '13px',
                                         ...getAssistantMessageStyle(infoAsistente[mascotaSeleccionada.id].nivel_gravedad) // Aplicar estilo dinámico
                                     }}>
-                                        <strong>🤖 Asistente Pata-Data:</strong>
+                                        <strong> Asistente Pata-Data:</strong>
                                         <p style={{ margin: '5px 0' }}>{infoAsistente[mascotaSeleccionada.id].interpretacion}</p>
                                         <small>💡 <em>{infoAsistente[mascotaSeleccionada.id].consejo}</em></small>
                                     </div>
@@ -845,7 +976,7 @@ function Dashboard() {
                     <>
             {/* 1. Menú Lateral (Sidebar) */}
             <aside style={styles.sidebar}>
-                {['INICIO', 'SALUD', 'HISTORIAL', 'MAPS', 'KADSY', 'KARDEX', 'COMUNIDAD', 'PERFIL'].map((tab) => (
+                {['INICIO', 'MIS MASCOTAS', 'SALUD', 'HISTORIAL', 'MAPS', 'KADSY', 'KARDEX', 'COMUNIDAD', 'PERFIL'].map((tab) => (
                     <button 
                         key={tab} 
                         style={styles.menuButton(activeSection === tab)}
@@ -872,7 +1003,7 @@ function Dashboard() {
                         </div>
                     </div>
                     <div style={styles.logoBox}>
-                        <span>🐾 Pata Data</span>
+                        <span> Pata Data</span>
                     </div>
                 </header>
 
