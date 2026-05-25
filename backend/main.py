@@ -104,7 +104,7 @@ async def registro_veterinario(vet_data: schemas.VeterinarioRegistro, db: Sessio
 @app.post("/api/login")
 async def login(login_data: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.Usuario).filter(models.Usuario.correo == login_data.username).first()
-    tipo = "dueño"
+    tipo = "dueno"
     
     if not user:
         user = db.query(models.Veterinario).filter(models.Veterinario.correo == login_data.username).first()
@@ -346,15 +346,17 @@ def obtener_usuario(correo: str, db: Session = Depends(get_db)):
     usuario = db.query(models.Usuario).filter(models.Usuario.correo == correo).first()
     if usuario:
         return {
+            "id": usuario.id,
             "nombre": usuario.nombre,
             "apellido": usuario.apellido,
             "correo": usuario.correo,
-            "rol": "dueño",
+            "rol": "dueno",
         }
 
     veterinario = db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first()
     if veterinario:
         return {
+            "id": veterinario.id,
             "nombre": veterinario.nombre,
             "apellido": veterinario.apellido,
             "correo": veterinario.correo,
@@ -368,12 +370,18 @@ def obtener_usuario(correo: str, db: Session = Depends(get_db)):
 
 # L) ACTUALIZAR PERFIL DE USUARIO
 @app.put("/api/usuario/{correo}", status_code=status.HTTP_200_OK)
-def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = None, db: Session = Depends(get_db)):
-    if not new_correo and not new_password:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Se requiere correo o contraseña para actualizar")
+def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = None, 
+                       nombre: str = None, apellido: str = None, cedula: str = None,
+                       especialidad: str = None, centro_veterinario: str = None,
+                       db: Session = Depends(get_db)):
+    if not any([new_correo, new_password, nombre, apellido, cedula, especialidad, centro_veterinario]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Se requieren datos para actualizar")
 
     usuario = db.query(models.Usuario).filter(models.Usuario.correo == correo).first()
     if usuario:
+        if nombre: usuario.nombre = nombre
+        if apellido: usuario.apellido = apellido
+
         if new_correo and new_correo != correo:
             if db.query(models.Usuario).filter(models.Usuario.correo == new_correo).first() or db.query(models.Veterinario).filter(models.Veterinario.correo == new_correo).first():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El correo ya está en uso")
@@ -391,6 +399,12 @@ def actualizar_usuario(correo: str, new_correo: str = None, new_password: str = 
 
     veterinario = db.query(models.Veterinario).filter(models.Veterinario.correo == correo).first()
     if veterinario:
+        if nombre: veterinario.nombre = nombre
+        if apellido: veterinario.apellido = apellido
+        if cedula: veterinario.cedula = cedula
+        if especialidad: veterinario.especialidad = especialidad
+        if centro_veterinario: veterinario.centro_veterinario = centro_veterinario
+
         if new_correo and new_correo != correo:
             if db.query(models.Usuario).filter(models.Usuario.correo == new_correo).first() or db.query(models.Veterinario).filter(models.Veterinario.correo == new_correo).first():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El correo ya está en uso")
@@ -433,3 +447,81 @@ def eliminar_usuario(correo: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=500, detail="Error al eliminar cuenta")
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+# --- ENDPOINTS DE COMUNIDAD Y FORO ---
+@app.get("/api/foro")
+def obtener_foro(db: Session = Depends(get_db)):
+    posts = db.query(models.ForoPost).order_by(models.ForoPost.fecha.desc()).all()
+    return [{
+        "id": p.id,
+        "contenido": p.contenido,
+        "fecha": p.fecha,
+        "usuario": f"{p.usuario.nombre} {p.usuario.apellido}"
+    } for p in posts]
+
+@app.post("/api/foro")
+def crear_post(post_in: schemas.ForoPostCreate, db: Session = Depends(get_db)):
+    user = db.query(models.Usuario).filter(models.Usuario.correo == post_in.correo).first()
+    if not user: raise HTTPException(status_code=404)
+    nuevo_post = models.ForoPost(usuario_id=user.id, contenido=post_in.contenido)
+    db.add(nuevo_post)
+    db.commit()
+    return {"mensaje": "Post creado"}
+
+# --- ENDPOINTS DE COMENTARIOS VETERINARIOS ---
+@app.get("/api/veterinarios/{vet_id}/comentarios")
+def obtener_comentarios_vet(vet_id: int, db: Session = Depends(get_db)):
+    comentarios = db.query(models.ComentarioVeterinario).filter(models.ComentarioVeterinario.veterinario_id == vet_id).all()
+    return [{
+        "usuario": f"{c.usuario.nombre} {c.usuario.apellido}",
+        "comentario": c.comentario,
+        "fecha": c.fecha
+    } for c in comentarios]
+
+@app.post("/api/comentarios-vet")
+def dejar_comentario(com_in: schemas.ComentarioVetCreate, db: Session = Depends(get_db)):
+    user = db.query(models.Usuario).filter(models.Usuario.correo == com_in.correo_usuario).first()
+    if not user: raise HTTPException(status_code=404)
+    nuevo = models.ComentarioVeterinario(usuario_id=user.id, veterinario_id=com_in.vet_id, comentario=com_in.comentario)
+    db.add(nuevo)
+    db.commit()
+    return {"mensaje": "Comentario registrado"}
+
+# --- BUSCAR VETERINARIOS Y CHAT ---
+@app.get("/api/veterinarios")
+def listar_veterinarios(db: Session = Depends(get_db)):
+    vets = db.query(models.Veterinario).all()
+    return vets
+
+@app.get("/api/mensajes/{correo1}/{correo2}")
+def obtener_mensajes(correo1: str, correo2: str, db: Session = Depends(get_db)):
+    mensajes = db.query(models.MensajeDirecto).filter(
+        ((models.MensajeDirecto.emisor_correo == correo1) & (models.MensajeDirecto.receptor_correo == correo2)) |
+        ((models.MensajeDirecto.emisor_correo == correo2) & (models.MensajeDirecto.receptor_correo == correo1))
+    ).order_by(models.MensajeDirecto.fecha.asc()).all()
+    return mensajes
+
+@app.post("/api/mensajes")
+def enviar_mensaje(msg_in: schemas.MensajeCreate, db: Session = Depends(get_db)):
+    nuevo = models.MensajeDirecto(emisor_correo=msg_in.emisor, receptor_correo=msg_in.receptor, contenido=msg_in.contenido)
+    db.add(nuevo)
+    db.commit()
+    return {"mensaje": "Mensaje enviado"}
+
+@app.get("/api/contactos/{correo}")
+def obtener_contactos(correo: str, db: Session = Depends(get_db)):
+    # Buscamos todos los mensajes donde el usuario es emisor o receptor
+    mensajes = db.query(models.MensajeDirecto).filter(
+        (models.MensajeDirecto.emisor_correo == correo) | 
+        (models.MensajeDirecto.receptor_correo == correo)
+    ).all()
+    
+    # Extraemos el correo de la otra persona involucrada en cada mensaje para obtener la lista de contactos única
+    contactos = set()
+    for m in mensajes:
+        if m.emisor_correo == correo:
+            contactos.add(m.receptor_correo)
+        else:
+            contactos.add(m.emisor_correo)
+            
+    return list(contactos)

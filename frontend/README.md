@@ -1,5 +1,7 @@
 # Pata-Data: Sistema de Monitoreo Biométrico para Mascotas
 
+<p align="center"><img src="../img/logo.jpg" width="150" alt="Pata Data Logo"></p>
+
 ## Integrantes
 * **Desarrollador:** [Torres Sirra Katherinne Michelle  y  Salvador Lopez Picazo] - Ingeniería en Sistemas Computacionales.
 
@@ -51,3 +53,21 @@ npm run dev
 * `GET /api/duenos?nombre={query}` - Buscador de dueños y sus mascotas.
 * `POST /api/simular-collar/{id}` - Inyecta un paquete de datos biométricos aleatorios.
 * `GET /api/mascotas/{id}/historial` - Devuelve el arreglo de signos vitales para graficar.
+* `GET /api/mascotas/{id}/alertas` - Historial de alertas de salud generadas.
+
+**Kardex y Antecedentes**
+* `POST /api/mascotas/kardex` - Registra una nueva entrada médica (vacuna, alergia, etc).
+* `GET /api/mascotas/{id}/kardex` - Obtiene el historial médico completo.
+
+**Inteligencia Artificial (Kadsy)**
+* `GET /api/mascotas/{id}/asistente` - Análisis clínico automatizado de signos vitales.
+* `POST /api/chat` - Chat interactivo con la IA Kadsy sobre la salud del paciente.
+
+**Comunicación y Comunidad**
+* `GET /api/foro` - Lista los posts de la comunidad.
+* `POST /api/foro` - Crea una nueva publicación.
+* `GET /api/veterinarios` - Lista de profesionales registrados.
+* `GET /api/mensajes/{c1}/{c2}` - Historial de chat entre dos usuarios.
+* `POST /api/mensajes` - Envía un mensaje directo.
+* `GET /api/contactos/{correo}` - Lista de personas con las que se ha chateado.
+* `POST /api/comentarios-vet` - Permite a los dueños calificar a un veterinario.

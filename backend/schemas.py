@@ -39,3 +39,17 @@ class KardexCreate(BaseModel):
 class KardexResponse(KardexCreate):
     id: int
     fecha: datetime
+
+class ForoPostCreate(BaseModel):
+    contenido: str
+    correo: EmailStr
+
+class ComentarioVetCreate(BaseModel):
+    vet_id: int
+    correo_usuario: EmailStr
+    comentario: str
+
+class MensajeCreate(BaseModel):
+    emisor: str
+    receptor: str
+    contenido: str

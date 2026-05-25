@@ -83,3 +83,32 @@ class Kardex(Base):
 
     # Relación
     mascota = relationship("Mascota", back_populates="kardex_entries")
+
+class ForoPost(Base):
+    __tablename__ = "foro_posts"
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    contenido = Column(Text, nullable=False)
+    fecha = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    usuario = relationship("Usuario")
+
+class ComentarioVeterinario(Base):
+    __tablename__ = "comentarios_veterinarios"
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    veterinario_id = Column(Integer, ForeignKey("veterinarios.id"))
+    comentario = Column(Text, nullable=False)
+    puntuacion = Column(Integer, default=5)
+    fecha = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    usuario = relationship("Usuario")
+    veterinario = relationship("Veterinario")
+
+class MensajeDirecto(Base):
+    __tablename__ = "mensajes_directos"
+    id = Column(Integer, primary_key=True, index=True)
+    emisor_correo = Column(String(100), nullable=False)
+    receptor_correo = Column(String(100), nullable=False)
+    contenido = Column(Text, nullable=False)
+    fecha = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

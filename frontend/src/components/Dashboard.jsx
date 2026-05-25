@@ -5,7 +5,9 @@ import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
+import VetDashboard from './VetDashboard';
 
+import logoImg from '../../../img/logo.jpg';
 // Solución para que los iconos de los marcadores aparezcan correctamente con Vite/React
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -38,7 +40,7 @@ const API_BASE = 'http://127.0.0.1:8000/api';
 
 function Dashboard() {
     const navigate = useNavigate();
-    const [rol] = useState(localStorage.getItem('rol') || '');
+    const [rol, setRol] = useState(localStorage.getItem('rol') || '');
     const [correoUsuario, setCorreoUsuario] = useState(localStorage.getItem('correo') || '');
 
     const [nombre, setNombre] = useState('');
@@ -48,7 +50,13 @@ function Dashboard() {
     const [misMascotas, setMisMascotas] = useState([]);
     const [signosMascota, setSignosMascota] = useState({});
     const [historialMascota, setHistorialMascota] = useState({});
+    const [mascotaSeleccionada, setMascotaSeleccionada] = useState(null);
     const [editandoId, setEditandoId] = useState(null);
+    const [busquedaMensaje, setBusquedaMensaje] = useState('');
+
+    const [chatHistory, setChatHistory] = useState([]);
+    const [mensajeChat, setMensajeChat] = useState('');
+    const [cargandoChat, setCargandoChat] = useState(false);
 
     const [kardexMascota, setKardexMascota] = useState({});
     const [nuevoKardexTipo, setNuevoKardexTipo] = useState('vacuna');
@@ -67,15 +75,14 @@ function Dashboard() {
     const [perfilMensaje, setPerfilMensaje] = useState('');
     const [inicioData, setInicioData] = useState(null);
 
-    const [busquedaNombre, setBusquedaNombre] = useState('');
-    const [duenosEncontrados, setDuenosEncontrados] = useState([]);
-    const [mascotaSeleccionada, setMascotaSeleccionada] = useState(null);
-    const [busquedaMensaje, setBusquedaMensaje] = useState('');
+    // Estados de Comunidad y Búsqueda
+    const [foroPosts, setForoPosts] = useState([]);
+    const [nuevoPost, setNuevoPost] = useState('');
+    const [veterinarios, setVeterinarios] = useState([]);
+    const [vetParaChat, setVetParaChat] = useState(null);
+    const [mensajesChatVet, setMensajesChatVet] = useState([]);
+    const [nuevoMsjVet, setNuevoMsjVet] = useState('');
 
-    // Estados para el Chat Kadsy
-    const [chatHistory, setChatHistory] = useState([]);
-    const [mensajeChat, setMensajeChat] = useState('');
-    const [cargandoChat, setCargandoChat] = useState(false);
     const razasPorEspecie = {
         'Perro': ['Labrador', 'Poodle', 'Chihuahua', 'Pastor Alemán', 'Golden Retriever', 'Bulldog', 'Beagle', 'Pug', 'Otro'],
         'Gato': ['Siamés', 'Persa', 'Maine Coon', 'Bengala', 'Ragdoll', 'Esfinge', 'Común', 'Otro']
@@ -176,15 +183,73 @@ function Dashboard() {
     };
 
     useEffect(() => {
-        if (correoUsuario) {
+        // Sincronizar estados con localStorage al montar el componente
+        const currentRol = localStorage.getItem('rol') || '';
+        const currentCorreo = localStorage.getItem('correo') || '';
+
+        setRol(currentRol);
+        setCorreoUsuario(currentCorreo);
+
+        if (currentCorreo) {
             cargarPerfil();
             cargarInicio();
         }
 
-        if (rol === 'dueño' && correoUsuario) {
+        if (currentRol === 'dueno' && currentCorreo) {
             cargarMascotas();
         }
-    }, [rol, correoUsuario]);
+
+        if (activeSection === 'COMUNIDAD') cargarForo();
+        if (activeSection === 'BUSCAR VETS' || activeSection === 'COMUNIDAD') cargarVeterinarios();
+    }, [rol, correoUsuario, activeSection]);
+
+    const cargarForo = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/foro`);
+            setForoPosts(res.data);
+        } catch (e) { console.error(e); }
+    };
+
+    const cargarVeterinarios = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/veterinarios`);
+            setVeterinarios(res.data);
+        } catch (e) { console.error(e); }
+    };
+
+    const enviarPostForo = async (e) => {
+        e.preventDefault();
+        if (!nuevoPost.trim()) return;
+        try {
+            await axios.post(`${API_BASE}/foro`, { contenido: nuevoPost, correo: correoUsuario });
+            setNuevoPost('');
+            cargarForo();
+        } catch (e) { console.error(e); }
+    };
+
+    const enviarComentarioVet = async (vetId, comentario) => {
+        try {
+            await axios.post(`${API_BASE}/comentarios-vet`, { vet_id: vetId, correo_usuario: correoUsuario, comentario });
+            alert("✅ Comentario enviado al perfil del veterinario.");
+        } catch (e) { console.error(e); }
+    };
+
+    const abrirChatVet = async (vet) => {
+        setVetParaChat(vet);
+        try {
+            const res = await axios.get(`${API_BASE}/mensajes/${correoUsuario}/${vet.correo}`);
+            setMensajesChatVet(res.data);
+        } catch (e) { console.error(e); }
+    };
+
+    const enviarMensajeVet = async () => {
+        if (!nuevoMsjVet.trim()) return;
+        try {
+            await axios.post(`${API_BASE}/mensajes`, { emisor: correoUsuario, receptor: vetParaChat.correo, contenido: nuevoMsjVet });
+            setNuevoMsjVet('');
+            abrirChatVet(vetParaChat);
+        } catch (e) { console.error(e); }
+    };
 
     const cerrarSesion = () => {
         localStorage.clear();
@@ -296,67 +361,23 @@ function Dashboard() {
         }
     };
 
-    const buscarDuenoPorNombre = async (e) => {
-        e.preventDefault();
-        setBusquedaMensaje('');
-        setDuenosEncontrados([]);
-        setMascotaSeleccionada(null);
-
-        if (!busquedaNombre.trim()) {
-            setBusquedaMensaje('Ingresa el nombre o correo del dueño.');
-            return;
-        }
-
-        try {
-            const respuesta = await axios.get(`${API_BASE}/duenos`, {
-                params: { nombre: busquedaNombre.trim() },
-            });
-
-            const dueños = Array.isArray(respuesta.data) ? respuesta.data : [];
-            if (dueños.length === 0) {
-                setBusquedaMensaje('❌ No se encontró ningún dueño con ese nombre.');
-                return;
-            }
-
-            setDuenosEncontrados(dueños);
-        } catch (error) {
-            console.error('Error en búsqueda de dueño:', error);
-            setBusquedaMensaje('❌ Error al buscar el dueño. Intenta de nuevo.');
-        }
-    };
-
     const seleccionarMascota = async (mascota) => {
         setMascotaSeleccionada(mascota);
         setBusquedaMensaje('');
-
         try {
             await verSignos(mascota.id);
-            
             await cargarKardex(mascota.id);
-
-            // Obtener interpretación del asistente
-            try {
-                const resAsistente = await axios.get(`${API_BASE}/mascotas/${mascota.id}/asistente`);
-                setInfoAsistente(prev => ({ ...prev, [mascota.id]: resAsistente.data }));
-            } catch (err) {
-                console.error("Error asistente:", err);
-            }
-
-            // Obtener alertas para veterinarios
-            if (rol === 'veterinario') {
-                await cargarAlertas(mascota.id);
-            }
-
-
+            await cargarAlertas(mascota.id);
+            setActiveSection('SALUD');
         } catch (error) {
             console.error('Error al seleccionar mascota:', error);
-            setBusquedaMensaje('❌ Error al cargar el historial de la mascota.');
         }
     };
 
     const simularCollar = async (mascotaId) => {
         try {
             await axios.post(`${API_BASE}/simular-collar/${mascotaId}`);
+            setMensaje('📡 Datos simulados enviados.');
             await verSignos(mascotaId);
         } catch (error) {
             console.error('Error al simular el collar:', error);
@@ -734,6 +755,79 @@ function Dashboard() {
         );
     };
 
+    const renderComunidad = () => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={styles.tabCard}>
+                <h3 style={{ textTransform: 'uppercase' }}>📢 FORO DE LA COMUNIDAD</h3>
+                <form onSubmit={enviarPostForo} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    <input type="text" placeholder="Comparte algo con otros dueños..." value={nuevoPost} onChange={(e) => setNuevoPost(e.target.value)} style={{ ...styles.input, flex: 1 }} />
+                    <button type="submit" style={styles.saveButton}>PUBLICAR</button>
+                </form>
+                <div style={{ maxHeight: '400px', overflowY: 'auto', background: '#F5E6B8', borderRadius: '15px', padding: '15px', border: '3px solid #000' }}>
+                    {foroPosts.map(post => (
+                        <div key={post.id} style={{ marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px solid #000' }}>
+                            <strong style={{ color: '#E56B1F' }}>{post.usuario}</strong>
+                            <p style={{ margin: '5px 0' }}>{post.contenido}</p>
+                            <small>{new Date(post.fecha).toLocaleString()}</small>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            <div style={styles.tabCard}>
+                <h3 style={{ textTransform: 'uppercase' }}>⭐ CALIFICAR VETERINARIOS</h3>
+                <p style={{ fontSize: '14px', marginBottom: '15px' }}>Deja un comentario público sobre tu experiencia:</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {veterinarios.slice(0, 5).map(v => (
+                        <div key={v.id} style={{ background: '#F5E6B8', padding: '10px', borderRadius: '10px', border: '2px solid #000' }}>
+                            <strong>Dr. {v.nombre} {v.apellido}</strong>
+                            <input 
+                                type="text" 
+                                placeholder="Escribe tu reseña..." 
+                                onKeyPress={(e) => { if(e.key === 'Enter') enviarComentarioVet(v.id, e.target.value); }}
+                                style={{ ...styles.input, width: '100%', marginTop: '5px', fontSize: '12px' }} 
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderBusquedaVets = () => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={styles.tabCard}>
+                <h3 style={{ textTransform: 'uppercase' }}>🏥 VETERINARIAS ASOCIADAS</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {veterinarios.map(v => (
+                        <div key={v.id} style={{ background: '#F5E6B8', padding: '15px', borderRadius: '15px', border: '3px solid #000' }}>
+                            <h4>{v.centro_veterinario || 'Consultorio Profesional'}</h4>
+                            <p>{v.nombre} {v.apellido} | {v.especialidad}</p>
+                            <button onClick={() => abrirChatVet(v)} style={{ ...styles.saveButton, marginTop: '10px', fontSize: '12px' }}>💬 HABLAR POR CHAT</button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {vetParaChat && (
+                <div style={{ ...styles.tabCard, backgroundColor: '#8FA3B5', display: 'flex', flexDirection: 'column' }}>
+                    <h3 style={{ textTransform: 'uppercase' }}>💬 CHAT: DR. {vetParaChat.nombre.toUpperCase()}</h3>
+                    <div style={{ flex: 1, background: '#F5E6B8', borderRadius: '15px', padding: '15px', border: '3px solid #000', marginBottom: '10px', overflowY: 'auto', minHeight: '300px' }}>
+                        {mensajesChatVet.map((m, i) => (
+                            <div key={i} style={{ textAlign: m.emisor_correo === correoUsuario ? 'right' : 'left', marginBottom: '10px' }}>
+                                <span style={{ background: m.emisor_correo === correoUsuario ? '#E56B1F' : '#fff', padding: '8px 12px', borderRadius: '10px', border: '2px solid #000', display: 'inline-block' }}>
+                                    {m.contenido}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <input type="text" value={nuevoMsjVet} onChange={(e) => setNuevoMsjVet(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && enviarMensajeVet()} style={{ ...styles.input, flex: 1 }} placeholder="Escribe un mensaje..." />
+                        <button onClick={enviarMensajeVet} style={styles.saveButton}>ENVIAR</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
     const renderOwnerDashboard = () => (
         <div style={{ padding: '20px' }}>
             {activeSection === 'SALUD' && renderSalud()}
@@ -743,25 +837,29 @@ function Dashboard() {
             {activeSection === 'KADSY' && renderKadsy()}
             {activeSection === 'KARDEX' && renderKardex()}
             {activeSection === 'MIS MASCOTAS' && renderMisMascotasSection()}
+            {activeSection === 'COMUNIDAD' && renderComunidad()}
+            {activeSection === 'BUSCAR VETS' && renderBusquedaVets()}
             
             {/* Sección por defecto para otras pestañas */}
-            {['INICIO', 'COMUNIDAD'].includes(activeSection) && (
+            {['INICIO'].includes(activeSection) && (
                 <div style={styles.tabCard}>
-                    {activeSection !== 'INICIO' && <h3 style={{ textTransform: 'uppercase' }}>SECCIÓN {activeSection}</h3>}
                     {activeSection === 'INICIO' && inicioData ? (
-                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '15px', borderRadius: '15px' }}>
-                            <h1 style={{ 
-                                fontSize: '42px', 
-                                fontWeight: '900', 
-                                textAlign: 'center', 
-                                marginBottom: '25px', 
-                                color: '#000',
-                                textShadow: '4px 4px 0px #F0B144',
-                                textTransform: 'uppercase',
-                                lineHeight: '1.1'
-                            }}>
-                                {inicioData.mensaje}
-                            </h1>
+                        <div style={{ background: 'rgba(255,255,255,0.2)', padding: '25px', borderRadius: '15px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '25px' }}>
+                                <img src={logoImg} alt="Logo Pata Data" style={{ width: '120px', height: '120px', borderRadius: '30px', border: '4px solid #000', marginBottom: '15px' }} />
+                                <h1 style={{ 
+                                    fontSize: '42px', 
+                                    fontWeight: '900', 
+                                    textAlign: 'center', 
+                                    margin: 0, 
+                                    color: '#000',
+                                    textShadow: '4px 4px 0px #F0B144',
+                                    textTransform: 'uppercase',
+                                    lineHeight: '1.1'
+                                }}>
+                                    {inicioData.mensaje}
+                                </h1>
+                            </div>
                             <p><strong>Total de mascotas en el sistema:</strong> {inicioData.cantidadMascotas}</p>
                             <p><em>Explora las opciones en el menú lateral para cuidar a tu mejor amigo.</em></p>
                             <div style={{ marginTop: '20px', borderTop: '2px solid #000', paddingTop: '15px' }}>
@@ -839,144 +937,18 @@ function Dashboard() {
         </>
     );
 
-    const renderVetDashboard = () => {
-        const historial = mascotaSeleccionada ? historialMascota[mascotaSeleccionada.id] || [] : [];
-        const ultimoRegistro = historial.length > 0 ? historial[historial.length - 1] : null;
-        const analisisBusqueda = analizarSalud(ultimoRegistro);
-
-        return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-                <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#f8f9fa' }}>
-                    <h3>Búsqueda de dueño</h3>
-                    <form onSubmit={buscarDuenoPorNombre} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-                        <input
-                            type="text"
-                            placeholder="Ingresa nombre, apellido o correo del dueño"
-                            value={busquedaNombre}
-                            onChange={(e) => setBusquedaNombre(e.target.value)}
-                            required
-                            style={{ padding: '10px', flex: '1 1 220px' }}
-                        />
-                        <button type="submit" style={{ padding: '10px 15px', background: '#007bff', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                            Buscar
-                        </button>
-                    </form>
-                    {busquedaMensaje && <p style={{ marginTop: '15px', color: busquedaMensaje.includes('❌') ? '#c82333' : '#155724', fontWeight: 'bold' }}>{busquedaMensaje}</p>}
-                </section>
-
-                {duenosEncontrados.length > 0 && (
-                    <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff' }}>
-                        <h3>Dueños encontrados</h3>
-                        <div style={{ display: 'grid', gap: '15px' }}>
-                            {duenosEncontrados.map((dueno) => (
-                                <div key={dueno.id} style={{ padding: '15px', background: '#f1f3f5', borderRadius: '8px' }}>
-                                    <p style={{ margin: '0 0 5px', fontWeight: 'bold' }}>{dueno.nombre} {dueno.apellido}</p>
-                                    <p style={{ margin: '0 0 10px', color: '#555' }}>{dueno.correo}</p>
-                                    {dueno.mascotas.length > 0 ? (
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                                            {dueno.mascotas.map((mascota) => (
-                                                <button
-                                                    key={mascota.id}
-                                                    onClick={() => seleccionarMascota(mascota)}
-                                                    style={{ padding: '8px 12px', border: 'none', borderRadius: '6px', background: mascotaSeleccionada?.id === mascota.id ? '#17a2b8' : '#007bff', color: '#fff', cursor: 'pointer' }}
-                                                >
-                                                    {mascota.nombre} ({mascota.especie})
-                                                </button>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p style={{ margin: 0, color: '#666' }}>Este dueño no tiene mascotas registradas.</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {mascotaSeleccionada && (
-                    <section style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', background: '#fff' }}>
-                        <h3>Mascota seleccionada</h3>
-                        <p><strong>ID:</strong> {mascotaSeleccionada.id}</p>
-                        <p><strong>Nombre:</strong> {mascotaSeleccionada.nombre}</p>
-                        <p><strong>Especie:</strong> {mascotaSeleccionada.especie}</p>
-                        <p><strong>Raza:</strong> {mascotaSeleccionada.raza}</p>
-
-                        {historial.length > 0 ? (
-                            <>
-                                <div style={{ margin: '15px 0', padding: '12px', borderRadius: '8px', background: analisisBusqueda.color, color: '#fff', fontWeight: 'bold' }}>
-                                    {analisisBusqueda.mensaje}
-                                </div>
-                                <div style={{ height: '240px', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid #ccc' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={historial}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="fecha_hora" tick={{ fontSize: 10 }} />
-                                            <YAxis yAxisId="left" domain={[35, 42]} fontSize={10} />
-                                            <YAxis yAxisId="right" orientation="right" domain={[60, 160]} fontSize={10} />
-                                            <Tooltip />
-                                            <Line yAxisId="left" type="monotone" dataKey="temperatura" stroke="#ff4d4d" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
-                                            <Line yAxisId="right" type="monotone" dataKey="pulsaciones" stroke="#007bff" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-
-                                {infoAsistente[mascotaSeleccionada.id] && infoAsistente[mascotaSeleccionada.id].interpretacion && (
-                                    <div style={{ 
-                                        marginTop: '10px', 
-                                        padding: '10px', 
-                                        borderRadius: '5px', 
-                                        fontSize: '13px',
-                                        ...getAssistantMessageStyle(infoAsistente[mascotaSeleccionada.id].nivel_gravedad) // Aplicar estilo dinámico
-                                    }}>
-                                        <strong> Asistente Pata-Data:</strong>
-                                        <p style={{ margin: '5px 0' }}>{infoAsistente[mascotaSeleccionada.id].interpretacion}</p>
-                                        <small>💡 <em>{infoAsistente[mascotaSeleccionada.id].consejo}</em></small>
-                                    </div>
-                                )}
-
-                                {alertasMascota[mascotaSeleccionada.id] && alertasMascota[mascotaSeleccionada.id].length > 0 && (
-                                    <div style={{ marginTop: '20px', padding: '15px', background: '#fefefe', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
-                                        <h4>Historial de Alertas</h4>
-                                        <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '5px', padding: '10px' }}>
-                                            {alertasMascota[mascotaSeleccionada.id].map((alerta, index) => (
-                                                <div key={index} style={{
-                                                    marginBottom: '10px',
-                                                    padding: '8px',
-                                                    borderRadius: '5px',
-                                                    borderLeft: `4px solid ${alerta.nivel_gravedad === 'critico' ? '#dc3545' : alerta.nivel_gravedad === 'alerta' ? '#ffc107' : '#17a2b8'}`,
-                                                    background: alerta.nivel_gravedad === 'critico' ? '#ffe0e0' : alerta.nivel_gravedad === 'alerta' ? '#fffbe0' : '#e0f7fa',
-                                                    fontSize: '13px'
-                                                }}>
-                                                    <p style={{ margin: '0 0 5px', fontWeight: 'bold' }}>
-                                                        {new Date(alerta.fecha_hora).toLocaleString()} - <span style={{ textTransform: 'uppercase' }}>{alerta.nivel_gravedad}</span>
-                                                    </p>
-                                                    <p style={{ margin: '0 0 5px' }}>{alerta.interpretacion}</p>
-                                                    <small style={{ color: '#555' }}>💡 {alerta.consejo}</small>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                            </>
-                        ) : (
-                            <p style={{ marginTop: '15px', color: '#666' }}>La mascota no tiene registros de historial clínico aún.</p>
-                        )}
-                    </section>
-                )}
-            </div>
-        );
-    };
-
     return (
         <div style={styles.appContainer}>
-            {(() => {
-                const healthStatus = analizarSalud(mascotaSeleccionada ? signosMascota[mascotaSeleccionada.id] : null);
+            {rol === 'veterinario' ? (
+                <VetDashboard />
+            ) : (
+                (() => {
+                const healthStatus = analizarSalud(mascotaSeleccionada ? (signosMascota[mascotaSeleccionada.id] || null) : null);
                 return (
                     <>
             {/* 1. Menú Lateral (Sidebar) */}
             <aside style={styles.sidebar}>
-                {['INICIO', 'MIS MASCOTAS', 'SALUD', 'HISTORIAL', 'MAPS', 'KADSY', 'KARDEX', 'COMUNIDAD', 'PERFIL'].map((tab) => (
+                {['INICIO', 'MIS MASCOTAS', 'SALUD', 'HISTORIAL', 'MAPS', 'KADSY', 'KARDEX', 'COMUNIDAD', 'BUSCAR VETS', 'PERFIL'].map((tab) => (
                     <button 
                         key={tab} 
                         style={styles.menuButton(activeSection === tab)}
@@ -990,36 +962,42 @@ function Dashboard() {
                 </button>
             </aside>
 
-            {/* Área de Contenido Principal */}
+            {/* 2. Área de Contenido */}
             <div style={styles.contentArea}>
-                {/* 2. Barra Superior (Header) */}
                 <header style={styles.header}>
-                    <div style={{ display: 'flex', gap: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={styles.headerButton}>
-                            {mascotaSeleccionada ? mascotaSeleccionada.nombre.toUpperCase() : 'SELECCIONA MASCOTA'}
+                            {mascotaSeleccionada ? `ESTADO DE ${mascotaSeleccionada.nombre.toUpperCase()}:` : 'SELECCIONA UNA MASCOTA'}
                         </div>
-                        <div style={{ ...styles.headerButton, backgroundColor: healthStatus.color, color: '#fff' }}>
-                            {healthStatus.mensaje.split(':')[0]}
-                        </div>
+                        {mascotaSeleccionada && (
+                            <div style={{ 
+                                backgroundColor: healthStatus.color, 
+                                padding: '10px 20px', 
+                                borderRadius: '25px', 
+                                color: '#fff', 
+                                fontWeight: 'bold',
+                                border: '3px solid #000'
+                            }}>
+                                {healthStatus.mensaje}
+                            </div>
+                        )}
                     </div>
-                    <div style={styles.logoBox}>
-                        <span> Pata Data</span>
+                    <div style={{ ...styles.logoBox, gap: '15px' }}>
+                        <img src={logoImg} alt="Logo" style={{ height: '40px', borderRadius: '5px' }} />
+                        PATA DATA
                     </div>
                 </header>
 
-                {/* 3. Contenido de Pestañas */}
                 <main style={{ flex: 1, overflowY: 'auto', padding: '0 30px 30px' }}>
-                    {rol === 'dueño' ? renderOwnerDashboard() : rol === 'veterinario' ? renderVetDashboard() : (
-                        <section style={styles.tabCard}>
-                            <p>Rol no válido o no autenticado.</p>
-                        </section>
-                    )}
+                    {renderOwnerDashboard()}
                 </main>
             </div>
-                    </>
+            </>
                 );
-            })()}
+            })()
+            )}
         </div>
     );
 }
+
 export default Dashboard;
