@@ -126,7 +126,7 @@ function Dashboard() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '0 30px',
+            padding: '0 0 0 30px',
         },
         headerButton: {
             backgroundColor: '#F0B144',
@@ -140,13 +140,13 @@ function Dashboard() {
         logoBox: {
             backgroundColor: '#F5E6B8',
             border: '3px solid #000',
-            borderRadius: '15px',
-            padding: '10px 20px',
+            borderTop: 'none',
+            borderRight: 'none',
+            borderRadius: '0 0 0 20px',
+            padding: '10px 25px',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
-            fontWeight: 'bold',
-            fontSize: '22px',
+            alignSelf: 'flex-start',
         },
         contentArea: {
             flex: 1,
@@ -846,7 +846,7 @@ function Dashboard() {
                     {activeSection === 'INICIO' && inicioData ? (
                         <div style={{ background: 'rgba(255,255,255,0.2)', padding: '25px', borderRadius: '15px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '25px' }}>
-                                <img src={logoImg} alt="Logo Pata Data" style={{ width: '120px', height: '120px', borderRadius: '30px', border: '4px solid #000', marginBottom: '15px' }} />
+                                <img src={logoImg} alt="Logo Pata Data" style={{ width: '140px', height: '140px', borderRadius: '35px', border: '4px solid #000', marginBottom: '15px' }} />
                                 <h1 style={{ 
                                     fontSize: '42px', 
                                     fontWeight: '900', 
@@ -982,9 +982,8 @@ function Dashboard() {
                             </div>
                         )}
                     </div>
-                    <div style={{ ...styles.logoBox, gap: '15px' }}>
-                        <img src={logoImg} alt="Logo" style={{ height: '40px', borderRadius: '5px' }} />
-                        PATA DATA
+                    <div style={styles.logoBox}>
+                        <img src={logoImg} alt="Logo" style={{ height: '60px', borderRadius: '5px' }} />
                     </div>
                 </header>
 

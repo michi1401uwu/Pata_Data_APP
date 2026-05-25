@@ -18,7 +18,7 @@ const getAssistantMessageStyle = (nivel_gravedad) => {
 
 function VetDashboard() {
     const navigate = useNavigate();
-    const [correoUsuario] = useState(localStorage.getItem('correo') || '');
+    const [correoUsuario, setCorreoUsuario] = useState(localStorage.getItem('correo') || '');
     const [activeSection, setActiveSection] = useState('INICIO');
     
     const [busquedaNombre, setBusquedaNombre] = useState('');
@@ -58,9 +58,19 @@ function VetDashboard() {
             border: '3px solid #000', borderRadius: '15px', padding: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', textTransform: 'uppercase',
             boxShadow: active ? 'none' : '4px 4px 0px #000', transform: active ? 'translate(2px, 2px)' : 'none', transition: 'all 0.1s ease'
         }),
-        header: { height: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px' },
+        header: { height: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 0 30px' },
         headerButton: { backgroundColor: '#F0B144', border: '3px solid #000', borderRadius: '25px', padding: '10px 25px', fontWeight: 'bold', fontSize: '18px' },
-        logoBox: { backgroundColor: '#F5E6B8', border: '3px solid #000', borderRadius: '15px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 'bold', fontSize: '22px' },
+        logoBox: { 
+            backgroundColor: '#F5E6B8', 
+            border: '3px solid #000', 
+            borderTop: 'none', 
+            borderRight: 'none', 
+            borderRadius: '0 0 0 20px', 
+            padding: '10px 25px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            alignSelf: 'flex-start' 
+        },
         contentArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
         tabCard: { backgroundColor: '#E56B1F', border: '3px solid #000', borderRadius: '25px', padding: '25px', marginBottom: '20px', minHeight: '150px', color: '#000', boxShadow: '6px 6px 0px #000' },
         input: { padding: '12px', borderRadius: '10px', border: '3px solid #000', fontFamily: 'inherit', fontSize: '16px' },
@@ -154,6 +164,7 @@ function VetDashboard() {
             
             if (nuevoCorreo && nuevoCorreo !== correoUsuario) {
                 localStorage.setItem('correo', nuevoCorreo);
+                setCorreoUsuario(nuevoCorreo);
             }
             
             setPerfilMensaje('✅ Perfil actualizado con éxito.');
@@ -198,23 +209,19 @@ function VetDashboard() {
     };
 
     const renderInicio = () => (
-        <div style={styles.tabCard}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-                <img src={logoImg} alt="Logo Pata Data" style={{ width: '80px', height: '80px', borderRadius: '15px', border: '3px solid #000' }} />
-                <div>
+        <div style={{ ...styles.tabCard, textAlign: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+                <img src={logoImg} alt="Logo Pata Data" style={{ width: '120px', height: '120px', borderRadius: '25px', border: '4px solid #000' }} />
+                <div style={{ textAlign: 'center' }}>
                     <h1 style={{ fontSize: '36px', textTransform: 'uppercase', margin: 0 }}>Bienvenido a Pata-Data</h1>
                     <h2 style={{ fontSize: '24px', margin: 0 }}>Dr. {perfilDatos.nombre} {perfilDatos.apellido}</h2>
                 </div>
             </div>
             <p>Panel de Gestión Veterinaria Pata-Data</p>
-            <div style={{ marginTop: '20px', display: 'flex', gap: '20px' }}>
-                <div style={{ background: '#F5E6B8', padding: '15px', borderRadius: '15px', border: '3px solid #000', flex: 1 }}>
-                    <h3>Mascotas en Red</h3>
-                    <p style={{ fontSize: '40px', fontWeight: 'bold' }}>{inicioData?.cantidadMascotas || 0}</p>
-                </div>
-                <div style={{ background: '#F5E6B8', padding: '15px', borderRadius: '15px', border: '3px solid #000', flex: 1 }}>
-                    <h3>Centro Actual</h3>
-                    <p>{perfilDatos.centro_veterinario || 'Consultorio Independiente'}</p>
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ background: '#F5E6B8', padding: '15px', borderRadius: '15px', border: '3px solid #000', width: '60%' }}>
+                    <h3>Centro Veterinario:</h3>
+                    <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{perfilDatos.centro_veterinario || 'Consultorio Independiente'}</p>
                 </div>
             </div>
             <div style={{ marginTop: '30px', padding: '20px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '15px', border: '2px solid #000' }}>
@@ -473,8 +480,7 @@ function VetDashboard() {
                         {mascotaSeleccionada ? `ATENDIENDO A: ${mascotaSeleccionada.nombre.toUpperCase()}` : 'MODO CONSULTA'}
                     </div>
                     <div style={styles.logoBox}>
-                        <img src={logoImg} alt="Logo" style={{ height: '40px', borderRadius: '5px' }} />
-                        Pata Data
+                        <img src={logoImg} alt="Logo" style={{ height: '60px', borderRadius: '5px' }} />
                     </div>
                 </header>
                 <main style={{ flex: 1, overflowY: 'auto', padding: '0 30px 30px' }}>
