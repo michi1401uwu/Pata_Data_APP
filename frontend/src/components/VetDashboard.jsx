@@ -51,14 +51,14 @@ function VetDashboard() {
     const [fotoPreview, setFotoPreview] = useState(null);
 
     const styles = {
-        appContainer: { display: 'flex', height: '100vh', backgroundColor: '#152433', fontFamily: '"Comic Sans MS", "Comic Sans", cursive', color: '#000' },
-        sidebar: { width: '280px', backgroundColor: '#8FA3B5', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', borderRight: '4px solid #000', overflowY: 'auto' },
+        appContainer: { display: 'flex', minHeight: '100vh', width: '100%', backgroundColor: '#152433', fontFamily: '"Comic Sans MS", "Comic Sans", cursive', color: '#000', boxSizing: 'border-box' },
+        sidebar: { width: '260px', backgroundColor: '#8FA3B5', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', borderRight: '4px solid #000', overflowY: 'auto', boxSizing: 'border-box' },
         menuButton: (active) => ({
             backgroundColor: active ? '#E56B1F' : '#F5E6B8',
-            border: '3px solid #000', borderRadius: '15px', padding: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', textTransform: 'uppercase',
+            border: '3px solid #000', borderRadius: '30px', padding: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', textTransform: 'uppercase',
             boxShadow: active ? 'none' : '4px 4px 0px #000', transform: active ? 'translate(2px, 2px)' : 'none', transition: 'all 0.1s ease'
         }),
-        header: { height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '50px', padding: '0 30px' },
+        header: { height: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 30px', boxSizing: 'border-box' },
         headerButton: { backgroundColor: '#F0B144', border: '3px solid #000', borderRadius: '25px', padding: '10px 25px', fontWeight: 'bold', fontSize: '18px' },
         logoBox: { 
             backgroundColor: '#F5E6B8', 
@@ -70,12 +70,14 @@ function VetDashboard() {
             display: 'flex', 
             alignItems: 'center', 
             alignSelf: 'flex-start' },
-        mainScrollArea: { flex: 1, padding: '30px', overflowY: 'auto' },
+        mainScrollArea: { flex: 1, overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 0', boxSizing: 'border-box' },
         contentArea: { 
             flex: 1, 
             display: 'flex', 
             flexDirection: 'column', 
             overflow: 'hidden',
+            padding: '0 20px',
+            boxSizing: 'border-box'
         },
         tabCard: { backgroundColor: '#E56B1F', border: '3px solid #000', borderRadius: '25px', padding: '25px', marginBottom: '20px', minHeight: '150px', color: '#000', boxShadow: '6px 6px 0px #000' },
         input: { padding: '12px', borderRadius: '10px', border: '3px solid #000', fontFamily: 'inherit', fontSize: '16px' },
@@ -489,7 +491,7 @@ function VetDashboard() {
                     </div>
                 </header>
                 <main style={styles.mainScrollArea}>
-                    <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+                    <div style={{ width: '100%', maxWidth: '1400px', margin: '0 auto', padding: '0 15px 20px 15px', boxSizing: 'border-box' }}>
                         {activeSection === 'INICIO' && renderInicio()}
                         {activeSection === 'BUSCAR PERFIL' && renderBusqueda()}
                         {activeSection === 'PACIENTES' && renderPacientes()}

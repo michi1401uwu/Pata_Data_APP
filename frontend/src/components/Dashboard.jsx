@@ -938,16 +938,14 @@ function Dashboard() {
         </>
     );
 
+    if (rol === 'veterinario') {
+        return <VetDashboard />;
+    }
+
+    const healthStatus = analizarSalud(mascotaSeleccionada ? (signosMascota[mascotaSeleccionada.id] || null) : null);
+
     return (
         <div style={styles.appContainer}>
-            {rol === 'veterinario' ? (
-                <VetDashboard />
-            ) : (
-                (() => {
-
-                const healthStatus = analizarSalud(mascotaSeleccionada ? (signosMascota[mascotaSeleccionada.id] || null) : null);
-                return (
-                    <>
             {/* 1. Menú Lateral (Sidebar) */}
             <aside style={styles.sidebar}>
                 {['INICIO', 'MIS MASCOTAS', 'SALUD', 'HISTORIAL', 'MAPS', 'KADSY', 'KARDEX', 'COMUNIDAD', 'BUSCAR VETS', 'PERFIL'].map((tab) => (
@@ -993,10 +991,6 @@ function Dashboard() {
                     {renderOwnerDashboard()}
                 </main>
             </div>
-            </>
-                );
-            })()
-            )}
         </div>
     );
 }
