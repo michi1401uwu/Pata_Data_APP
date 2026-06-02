@@ -153,6 +153,7 @@ function Dashboard() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
+        
         },
         tabCard: {
             backgroundColor: '#E56B1F',
@@ -538,13 +539,13 @@ function Dashboard() {
     );
 
     const renderSalud = () => {
-        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en INICIO</h3></div>;
+        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en "MIS MASCOTAS"</h3></div>;
         const historial = historialMascota[mascotaSeleccionada.id] || [];
         return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={styles.tabCard}>
                     <h3 style={{ textTransform: 'uppercase' }}>MONITOREO DE TEMPERATURA</h3>
-                    <div style={{ height: '250px', background: '#fff', padding: '10px', borderRadius: '15px' }}>
+                    <div style={{ height: '250px', width: '100%', background: '#fff', padding: '10px', borderRadius: '15px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={historial}>
                                 <CartesianGrid strokeDasharray="3 3" />
@@ -558,7 +559,7 @@ function Dashboard() {
                 </div>
                 <div style={styles.tabCard}>
                     <h3 style={{ textTransform: 'uppercase' }}>RITMO CARDIACO</h3>
-                    <div style={{ height: '250px', background: '#fff', padding: '10px', borderRadius: '15px' }}>
+                    <div style={{ height: '250px', width: '100%', background: '#fff', padding: '10px', borderRadius: '15px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={historial}>
                                 <CartesianGrid strokeDasharray="3 3" />
@@ -575,7 +576,7 @@ function Dashboard() {
     };
 
     const renderHistorial = () => {
-        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en INICIO</h3></div>;
+        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en "MIS MASCOTAS"</h3></div>;
         const historial = historialMascota[mascotaSeleccionada.id] || [];
         return (
             <div style={styles.tabCard}>
@@ -607,7 +608,7 @@ function Dashboard() {
     };
 
     const renderMaps = () => {
-        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en INICIO</h3></div>;
+        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en "MIS MASCOTAS"</h3></div>;
         const signo = signosMascota[mascotaSeleccionada.id];
         return (
             <div style={{ ...styles.tabCard, flex: 1 }}>
@@ -631,7 +632,7 @@ function Dashboard() {
     };
 
     const renderKardex = () => {
-        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en INICIO</h3></div>;
+        if (!mascotaSeleccionada) return <div style={styles.tabCard}><h3>Selecciona una mascota en "MIS MASCOTAS"</h3></div>;
         const entradas = kardexMascota[mascotaSeleccionada.id] || [];
 
         return (
@@ -708,7 +709,7 @@ function Dashboard() {
         if (!mascotaSeleccionada) return (
             <div style={styles.tabCard}>
                 <h3 style={{ textTransform: 'uppercase' }}>💬 Kadsy: Tu Asistente Inteligente</h3>
-                <p>¡Hola! Para poder ayudarte, primero selecciona una mascota en la pestaña <strong>INICIO</strong>.</p>
+                <p>¡Hola! Para poder ayudarte, primero selecciona una mascota en la pestaña <strong>"MIS MASCOTAS"</strong>.</p>
             </div>
         );
         
@@ -775,7 +776,7 @@ function Dashboard() {
             </div>
             <div style={styles.tabCard}>
                 <h3 style={{ textTransform: 'uppercase' }}>⭐ CALIFICAR VETERINARIOS</h3>
-                <p style={{ fontSize: '14px', marginBottom: '15px' }}>Deja un comentario público sobre tu experiencia:</p>
+                <p style={{ fontSize: '14px', marginBottom: '10px' }}>Deja un comentario público sobre tu experiencia:</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {veterinarios.slice(0, 5).map(v => (
                         <div key={v.id} style={{ background: '#F5E6B8', padding: '10px', borderRadius: '10px', border: '2px solid #000' }}>
@@ -784,7 +785,7 @@ function Dashboard() {
                                 type="text" 
                                 placeholder="Escribe tu reseña..." 
                                 onKeyPress={(e) => { if(e.key === 'Enter') enviarComentarioVet(v.id, e.target.value); }}
-                                style={{ ...styles.input, width: '100%', marginTop: '5px', fontSize: '12px' }} 
+                                style={{ ...styles.input, width: '100%', marginTop: '1px', fontSize: '12px' }} 
                             />
                         </div>
                     ))}
@@ -829,7 +830,7 @@ function Dashboard() {
     );
 
     const renderOwnerDashboard = () => (
-        <div style={{ padding: '20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%', padding: '0 0 20px 0' }}>
             {activeSection === 'SALUD' && renderSalud()}
             {activeSection === 'HISTORIAL' && renderHistorial()}
             {activeSection === 'MAPS' && renderMaps()}
@@ -943,6 +944,7 @@ function Dashboard() {
                 <VetDashboard />
             ) : (
                 (() => {
+
                 const healthStatus = analizarSalud(mascotaSeleccionada ? (signosMascota[mascotaSeleccionada.id] || null) : null);
                 return (
                     <>
@@ -987,7 +989,7 @@ function Dashboard() {
                     </div>
                 </header>
 
-                <main style={{ flex: 1, overflowY: 'auto', padding: '0 30px 30px' }}>
+                <main style={styles.mainScrollArea}>
                     {renderOwnerDashboard()}
                 </main>
             </div>

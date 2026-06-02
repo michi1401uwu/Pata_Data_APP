@@ -58,7 +58,7 @@ function VetDashboard() {
             border: '3px solid #000', borderRadius: '15px', padding: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', textTransform: 'uppercase',
             boxShadow: active ? 'none' : '4px 4px 0px #000', transform: active ? 'translate(2px, 2px)' : 'none', transition: 'all 0.1s ease'
         }),
-        header: { height: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 0 30px' },
+        header: { height: '100px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '50px', padding: '0 30px' },
         headerButton: { backgroundColor: '#F0B144', border: '3px solid #000', borderRadius: '25px', padding: '10px 25px', fontWeight: 'bold', fontSize: '18px' },
         logoBox: { 
             backgroundColor: '#F5E6B8', 
@@ -69,9 +69,14 @@ function VetDashboard() {
             padding: '10px 25px', 
             display: 'flex', 
             alignItems: 'center', 
-            alignSelf: 'flex-start' 
+            alignSelf: 'flex-start' },
+        mainScrollArea: { flex: 1, padding: '30px', overflowY: 'auto' },
+        contentArea: { 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'hidden',
         },
-        contentArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
         tabCard: { backgroundColor: '#E56B1F', border: '3px solid #000', borderRadius: '25px', padding: '25px', marginBottom: '20px', minHeight: '150px', color: '#000', boxShadow: '6px 6px 0px #000' },
         input: { padding: '12px', borderRadius: '10px', border: '3px solid #000', fontFamily: 'inherit', fontSize: '16px' },
         saveButton: { backgroundColor: '#F0B144', border: '3px solid #000', borderRadius: '15px', padding: '12px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '4px 4px 0px #000' }
@@ -462,7 +467,7 @@ function VetDashboard() {
     return (
         <div style={styles.appContainer}>
             <aside style={styles.sidebar}>
-                <div style={{ textAlign: 'center', marginBottom: '20px', fontSize: '24px', fontWeight: 'bold', borderBottom: '3px solid #000', paddingBottom: '10px' }}>VET PANEL</div>
+                <div style={{ textAlign: 'center', marginBottom: '20px', fontSize: '24px', fontWeight: 'bold', borderBottom: '3px solid #000', paddingBottom: '10px' }}></div>
                 <button style={styles.menuButton(activeSection === 'INICIO')} onClick={() => setActiveSection('INICIO')}>INICIO</button>
                 <button style={styles.menuButton(activeSection === 'BUSCAR PERFIL')} onClick={() => setActiveSection('BUSCAR PERFIL')}>BUSCAR PERFIL</button>
                 <button style={styles.menuButton(activeSection === 'PACIENTES')} onClick={() => setActiveSection('PACIENTES')}>PACIENTES</button>
@@ -483,14 +488,16 @@ function VetDashboard() {
                         <img src={logoImg} alt="Logo" style={{ height: '60px', borderRadius: '5px' }} />
                     </div>
                 </header>
-                <main style={{ flex: 1, overflowY: 'auto', padding: '0 30px 30px' }}>
-                    {activeSection === 'INICIO' && renderInicio()}
-                    {activeSection === 'BUSCAR PERFIL' && renderBusqueda()}
-                    {activeSection === 'PACIENTES' && renderPacientes()}
-                    {activeSection === 'MI PERFIL' && renderPerfil()}
-                    {activeSection === 'COMENTARIOS' && renderComentarios()}
-                    {activeSection === 'MENSAJES' && renderMensajes()}
-                    {activeSection === 'VETERINARIAS ASOCIADAS' && renderPlaceholder('Veterinarias Asociadas')}
+                <main style={styles.mainScrollArea}>
+                    <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+                        {activeSection === 'INICIO' && renderInicio()}
+                        {activeSection === 'BUSCAR PERFIL' && renderBusqueda()}
+                        {activeSection === 'PACIENTES' && renderPacientes()}
+                        {activeSection === 'MI PERFIL' && renderPerfil()}
+                        {activeSection === 'COMENTARIOS' && renderComentarios()}
+                        {activeSection === 'MENSAJES' && renderMensajes()}
+                        {activeSection === 'VETERINARIAS ASOCIADAS' && renderPlaceholder('Veterinarias Asociadas')}
+                    </div>
                 </main>
             </div>
         </div>
