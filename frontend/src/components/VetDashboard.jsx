@@ -5,7 +5,7 @@ import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import logoImg from '../../../img/logo.jpg';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = 'http://10.10.252.195:8000/api';
 
 const getAssistantMessageStyle = (nivel_gravedad) => {
     switch (nivel_gravedad) {

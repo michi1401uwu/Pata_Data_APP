@@ -36,7 +36,7 @@ const getAssistantMessageStyle = (nivel_gravedad) => {
 };
 
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = 'http://10.10.252.195:8000/api';
 
 function Dashboard() {
     const navigate = useNavigate();

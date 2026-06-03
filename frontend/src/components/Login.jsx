@@ -13,7 +13,7 @@ function Login() {
         e.preventDefault();
         
         try {
-        const respuesta = await axios.post('http://127.0.0.1:8000/api/login', {
+        const respuesta = await axios.post('http://10.10.252.195:8000/api/login', {
             username: correo,
             password: password
         });

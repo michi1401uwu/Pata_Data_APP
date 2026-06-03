@@ -30,13 +30,13 @@ function Registro() {
             password
         };
 
-        let url = 'http://127.0.0.1:8000/api/registro/usuario';
+        let url = 'http://10.10.252.195:8000/api/registro/usuario';
 
         if (tipo === 'veterinario') {
             datosParaEnviar.cedula = cedula;
             datosParaEnviar.especialidad = especialidad;
             datosParaEnviar.centro_veterinario = centro;
-            url = 'http://127.0.0.1:8000/api/registro/veterinario';
+            url = 'http://10.10.252.195:8000/api/registro/veterinario';
         }
 
         try {
